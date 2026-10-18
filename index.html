@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Catastro Perené</title>
+        <script>
+            // before the bundle, so a dark user never sees a light flash. light and dark are the only themes core knows here;
+            // system and an unknown id take the os setting, as core's resolveTheme
+            try {
+                const schemes = { light: 'light', dark: 'dark' }
+                const stored = localStorage.getItem('catastro.theme')
+                const dark = matchMedia('(prefers-color-scheme: dark)').matches
+                const theme = stored && Object.hasOwn(schemes, stored) ? stored : dark ? 'dark' : 'light'
+                document.documentElement.dataset.theme = theme
+                document.documentElement.style.colorScheme = schemes[theme]
+            } catch {}
+        </script>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
+</html>

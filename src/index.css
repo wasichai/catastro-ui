@@ -1,0 +1,4 @@
+@import 'tailwindcss';
+@import '@wasichai/ui/theme.css';
+/* the @wasichai packages ship class names, not css, so tailwind scans them */
+@source '../node_modules/@wasichai';

@@ -1,0 +1,12 @@
+{
+    "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+    "include-component-in-tag": false,
+    "packages": {
+        ".": {
+            "release-type": "node",
+            "package-name": "catastro-ui",
+            "changelog-path": "CHANGELOG.md",
+            "initial-version": "1.0.0"
+        }
+    }
+}

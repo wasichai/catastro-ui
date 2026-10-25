@@ -1,5 +1,5 @@
 import { ApiError, api, type ApiClient } from '@wasichai/core'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type Query } from '@tanstack/react-query'
 import type { CapaGis, Corte, Decision, Ficha, Filtros, LotesCollection, Orden, Pagina, Panel, ResultadoDecision, ServiciosGeoServer } from './tipos'
 
 const BASE = '/catastro/brechas'
@@ -22,6 +22,13 @@ export function parametros(corte: string | undefined, filtros: Filtros, extra: R
 // no corte loaded yet: /panel, /fichas and /lotes answer 404
 export const sinCortes = (error: unknown) => error instanceof ApiError && error.status === 404
 
+// the last data stays on screen while the next loads, but only within the same corte (queryKey[2]): data of another
+// corte would let a decision go with the wrong year
+const delMismoCorte =
+  <T>(corte: string | undefined) =>
+  (anterior: T | undefined, consulta: Query<T, Error, T, readonly unknown[]> | undefined) =>
+    consulta?.queryKey[2] === corte ? anterior : undefined
+
 export function useCortes() {
   return useQuery({ queryKey: ['brechas', 'cortes'], queryFn: () => api<Corte[]>(`${BASE}/cortes`), retry: false })
 }
@@ -31,7 +38,6 @@ export function usePanel(corte: string | undefined) {
     queryKey: ['brechas', 'panel', corte],
     queryFn: () => api<Panel>(`${BASE}/panel?${parametros(corte, FILTROS_VACIOS)}`),
     enabled: !!corte,
-    placeholderData: keepPreviousData,
     retry: false
   })
 }
@@ -39,10 +45,10 @@ export function usePanel(corte: string | undefined) {
 export function useFichas(corte: string | undefined, filtros: Filtros, orden: Orden, page: number, size: number) {
   const qs = parametros(corte, filtros, { orden, page, size }).toString()
   return useQuery({
-    queryKey: ['brechas', 'fichas', qs],
+    queryKey: ['brechas', 'fichas', corte, qs],
     queryFn: () => api<Pagina<Ficha>>(`${BASE}/fichas?${qs}`),
     enabled: !!corte,
-    placeholderData: keepPreviousData,
+    placeholderData: delMismoCorte<Pagina<Ficha>>(corte),
     retry: false
   })
 }
@@ -58,15 +64,17 @@ function conDeltaNumerico(d: LotesCollection): LotesCollection {
   }
 }
 
-export function useLotes(corte: string | undefined, filtros: Filtros) {
-  const qs = parametros(corte, filtros).toString()
+// the lotes of a corte weigh megabytes: they come once per corte and sector (the lotes do not carry it), and the map
+// applies the other filters itself (filtroDeLotes). a decision invalidates them, since they carry the estado
+export function useLotes(corte: string | undefined, sector: string) {
+  const qs = parametros(corte, { ...FILTROS_VACIOS, sector }).toString()
   return useQuery({
-    queryKey: ['brechas', 'lotes', qs],
+    queryKey: ['brechas', 'lotes', corte, qs],
     queryFn: () => api<LotesCollection>(`${BASE}/lotes?${qs}`),
     select: conDeltaNumerico,
     enabled: !!corte,
-    // the map keeps the last lotes while the new filter loads
-    placeholderData: keepPreviousData,
+    staleTime: 5 * 60_000,
+    placeholderData: delMismoCorte<LotesCollection>(corte),
     retry: false
   })
 }
@@ -80,29 +88,43 @@ export function useCapasGis(enabled: boolean) {
   return useQuery({ queryKey: ['gis', 'layers'], queryFn: () => api<CapaGis[]>('/gis/layers'), enabled, retry: false })
 }
 
-// a decision refreshes everything the dashboard shows of the corte: panel, fichas and lotes
+// a decision refreshes everything the dashboard shows of the corte: panel, fichas and lotes. the result shows at
+// once; the refetch does not hold it
 export function useDecidir() {
   const cliente = useQueryClient()
   return useMutation({
     mutationFn: (d: Decision) => api<ResultadoDecision>(`${BASE}/decisiones`, { method: 'POST', body: JSON.stringify(d) }),
-    onSuccess: () =>
-      cliente.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'brechas' && ['panel', 'fichas', 'lotes'].includes(q.queryKey[1] as string) })
+    onSuccess: () => {
+      void cliente.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'brechas' && ['panel', 'fichas', 'lotes'].includes(q.queryKey[1] as string) })
+    }
   })
 }
+
+// a name the file systems take: no | (the corte's key has one), / or the like
+const nombreSeguro = (s: string) => s.replace(/[\\/:*?"<>|]+/g, '_')
 
 function nombreDeArchivo(respuesta: Response, corte: string | undefined): string {
   const disposicion = respuesta.headers.get('Content-Disposition') ?? ''
   const nombre = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposicion)?.[1]
-  return nombre ? decodeURIComponent(nombre) : `brechas-${corte ?? 'corte'}.csv`
+  if (nombre) {
+    try {
+      return nombreSeguro(decodeURIComponent(nombre))
+    } catch {
+      // a stray % in the name: take it as it came
+      return nombreSeguro(nombre)
+    }
+  }
+  return nombreSeguro(`brechas-${corte ?? 'corte'}.csv`)
 }
 
 // the CSV needs the Bearer token, so a plain link cannot download it: the file is fetched with core's token and
-// handed to the browser as a blob
-export async function descargarCsv(cliente: Pick<ApiClient, 'baseUrl' | 'getToken'>, corte: string | undefined, filtros: Filtros, orden: Orden) {
+// handed to the browser as a blob. a 401 drops the token, as core's api() does: the next request signs the user out
+export async function descargarCsv(cliente: Pick<ApiClient, 'baseUrl' | 'getToken' | 'setToken'>, corte: string | undefined, filtros: Filtros, orden: Orden) {
   const headers = new Headers({ Accept: 'text/csv' })
   const token = cliente.getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const respuesta = await fetch(`${cliente.baseUrl}${BASE}/fichas.csv?${parametros(corte, filtros, { orden })}`, { headers })
+  if (respuesta.status === 401) cliente.setToken(null)
   if (!respuesta.ok) throw new ApiError(respuesta.status, respuesta.statusText)
   const url = URL.createObjectURL(await respuesta.blob())
   const enlace = document.createElement('a')
@@ -111,5 +133,6 @@ export async function descargarCsv(cliente: Pick<ApiClient, 'baseUrl' | 'getToke
   document.body.appendChild(enlace)
   enlace.click()
   enlace.remove()
-  URL.revokeObjectURL(url)
+  // some browsers still read the url after click(): it is revoked on the next tick
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }

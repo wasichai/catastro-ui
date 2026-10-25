@@ -1,14 +1,16 @@
-import type { ClaseLeyenda } from '../aranceles/colores'
+import type { ClaseLeyenda } from '../comun/colores'
+import { CONTROL } from '../comun/ui'
 import { useCapasGis, useServiciosGeoServer } from './api'
 import { COLOR_SELECCION, COLOREAR, type Colorear } from './colores'
 import type { CapaGis, CapaWms } from './tipos'
 
-const control = 'h-8 rounded-md border border-border bg-surface px-2 text-sm text-ink'
-
-// the WMS url of a published layer: its own, or the service's with the layer name
-export function urlWms(capa: CapaGis, servicioWms: string): string {
+// the WMS url of a published layer: its own, or a GetMap on the service with the layer name (wmsTileUrl adds only
+// bbox, size, srs, format and transparency). null when there is neither: the layer is not offered
+export function urlWms(capa: CapaGis, servicioWms: string | undefined): string | null {
   if (capa.wms) return capa.wms
-  return `${servicioWms}${servicioWms.includes('?') ? '&' : '?'}layers=${encodeURIComponent(capa.layerName)}`
+  if (!servicioWms) return null
+  const p = new URLSearchParams({ service: 'WMS', version: '1.1.1', request: 'GetMap', styles: '', layers: capa.layerName })
+  return `${servicioWms}${servicioWms.includes('?') ? '&' : '?'}${p}`
 }
 
 export interface CapasMapaProps {
@@ -29,14 +31,17 @@ export function CapasMapa({ colorear, onColorear, mostrarVias, onMostrarVias, an
   const servicios = useServiciosGeoServer()
   const activo = servicios.data?.enabled === true
   const capas = useCapasGis(activo)
-  const publicadas = (capas.data ?? []).filter((c) => c.published)
+  const publicadas = (capas.data ?? []).flatMap((c) => {
+    const url = c.published ? urlWms(c, servicios.data?.wms) : null
+    return url ? [{ ...c, url }] : []
+  })
   const prendida = (id: string) => wms.find((c) => c.id === id)
 
   return (
     <div className="space-y-3 text-sm">
       <label className="flex flex-col gap-1 text-xs text-ink-muted">
         Colorear lotes por
-        <select value={colorear} onChange={(e) => onColorear(e.target.value as Colorear)} className={control}>
+        <select value={colorear} onChange={(e) => onColorear(e.target.value as Colorear)} className={CONTROL}>
           {Object.entries(COLOREAR).map(([k, v]) => (
             <option key={k} value={k}>
               {v}
@@ -56,6 +61,8 @@ export function CapasMapa({ colorear, onColorear, mostrarVias, onMostrarVias, an
         <legend className="text-xs font-medium text-ink-muted">GeoServer (WMS)</legend>
         {servicios.isPending ? (
           <p className="text-xs text-ink-muted">Cargando…</p>
+        ) : servicios.isError ? (
+          <p className="text-xs text-danger">No se pudo consultar GeoServer.</p>
         ) : !activo ? (
           <p className="text-xs text-ink-muted">GeoServer no está activo</p>
         ) : capas.isError ? (
@@ -75,11 +82,7 @@ export function CapasMapa({ colorear, onColorear, mostrarVias, onMostrarVias, an
                       type="checkbox"
                       checked={!!on}
                       onChange={(e) =>
-                        onWms(
-                          e.target.checked
-                            ? [...wms, { id: c.layerName, url: urlWms(c, servicios.data!.wms), opacity: OPACIDAD_INICIAL }]
-                            : wms.filter((w) => w.id !== c.layerName)
-                        )
+                        onWms(e.target.checked ? [...wms, { id: c.layerName, url: c.url, opacity: OPACIDAD_INICIAL }] : wms.filter((w) => w.id !== c.layerName))
                       }
                     />
                     <span className="truncate" title={c.layerName}>
@@ -94,6 +97,7 @@ export function CapasMapa({ colorear, onColorear, mostrarVias, onMostrarVias, an
                     aria-label={`Opacidad de ${c.label || c.layerName}`}
                     disabled={!on}
                     value={Math.round((on?.opacity ?? OPACIDAD_INICIAL) * 100)}
+                    aria-valuetext={`${Math.round((on?.opacity ?? OPACIDAD_INICIAL) * 100)} %`}
                     onChange={(e) => onWms(wms.map((w) => (w.id === c.layerName ? { ...w, opacity: Number(e.target.value) / 100 } : w)))}
                     className="w-full"
                   />

@@ -1,27 +1,17 @@
-import { escapar } from '../aranceles/popup'
+import { soles } from '../comun/formato'
+import { popupDeFilas } from '../comun/popup'
 import { ETIQUETA_CATEGORIA, ETIQUETA_CONFIANZA, ETIQUETA_ESTADO } from './colores'
-import type { Decimal, LoteProps } from './tipos'
+import type { LoteProps } from './tipos'
 
-export function soles(v: Decimal | undefined): string {
-  if (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) return '—'
-  return `S/ ${Number(v).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-// the popup of a lote: its codes, the gap and the decision. the same markup as the aranceles' popup
+// the popup of a lote: its codes, the difference and the decision. maplibre drops null properties: they arrive as
+// undefined
 export function popupHtml(p: LoteProps): string {
-  const fila = (k: string, v: string) =>
-    `<div style="display:flex;gap:8px"><span style="color:var(--ink-muted)">${escapar(k)}</span><span>${escapar(v)}</span></div>`
-  return (
-    `<div data-theme="light" style="color:var(--ink);font:12px/1.5 ui-sans-serif,system-ui">` +
-    `<div style="font-weight:600">${escapar(p.codigo_municipal ?? 'Sin código municipal')}</div>` +
-    [
-      fila('Código catastral', p.codigo_catastro ?? '—'),
-      fila('Categoría', ETIQUETA_CATEGORIA[p.categoria] ?? p.categoria ?? '—'),
-      fila('Confianza', ETIQUETA_CONFIANZA[p.confianza] ?? p.confianza ?? '—'),
-      fila('Δ impuesto', soles(p.delta_impuesto)),
-      fila('Supera 5 UIT', p.supera_5_uit ? 'Sí' : 'No'),
-      fila('Estado', ETIQUETA_ESTADO[p.estado] ?? p.estado ?? 'Pendiente')
-    ].join('') +
-    `</div>`
-  )
+  return popupDeFilas(p.codigo_municipal ?? 'Sin código municipal', [
+    ['Código catastral', p.codigo_catastro ?? '—'],
+    ['Categoría', ETIQUETA_CATEGORIA[p.categoria] ?? p.categoria ?? '—'],
+    ['Confianza', ETIQUETA_CONFIANZA[p.confianza] ?? p.confianza ?? '—'],
+    ['Diferencia de impuesto', soles(p.delta_impuesto, { signo: true })],
+    ['Supera 5 UIT', p.supera_5_uit ? 'Sí' : 'No'],
+    ['Estado', ETIQUETA_ESTADO[p.estado] ?? p.estado ?? 'Pendiente']
+  ])
 }

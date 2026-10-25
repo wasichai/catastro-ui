@@ -5,6 +5,7 @@ import { mockFetch, renderWithProviders, type FetchMock, type MockRoute } from '
 import { brechasModule } from '../brechasModule'
 import type { BrechasMapaProps } from './BrechasMapa'
 import { BrechasPage } from './BrechasPage'
+import { DIVERGENTE } from './colores'
 import type { Corte, Ficha, LoteFeature, Panel } from './tipos'
 
 // jsdom has no webgl: the map is a stub that shows what it was given and lets the test select like a click or a box
@@ -13,11 +14,22 @@ vi.mock('./BrechasMapa', () => ({
     <div data-testid="mapa">
       <span data-testid="mapa-lotes">{p.lotes?.features.length ?? 0} lotes</span>
       <span data-testid="mapa-seleccion">{p.seleccion.join(',')}</span>
+      <span data-testid="mapa-filtro">{JSON.stringify(p.filtro)}</span>
       <span data-testid="mapa-wms">{p.wms.map((w) => `${w.id}@${w.opacity}`).join(',')}</span>
       <span data-testid="mapa-vias">{p.mostrarVias ? `${p.vias?.features.length ?? 0} vías` : 'sin vías'}</span>
       <span data-testid="mapa-colorear">{p.colorear}</span>
       <button onClick={() => p.onSeleccionar(['M2', 'M3'], true)}>recuadro M2 M3</button>
       <button onClick={() => p.onSeleccionar(['M1'], false)}>clic M1</button>
+      <button
+        onClick={() =>
+          p.onSeleccionar(
+            Array.from({ length: 501 }, (_, i) => `G${i}`),
+            true
+          )
+        }
+      >
+        recuadro grande
+      </button>
     </div>
   )
 }))
@@ -42,7 +54,10 @@ const panel = (anio = 2026, clave = CORTE_A): Panel => ({
     { clave: 'PENDIENTE', fichas: 25 },
     { clave: 'DESCARTADO', fichas: 5 }
   ],
-  top_sectores: [{ sector: '02', fichas: 8, delta_impuesto: 400 }]
+  top_sectores: [
+    { sector: '02', fichas: 8, delta_impuesto: 400 },
+    { sector: '05', fichas: 3, delta_impuesto: -100 }
+  ]
 })
 
 const ficha = (i: number, codigo: string | null, extra: Partial<Ficha> = {}): Ficha => ({
@@ -75,8 +90,13 @@ const ficha = (i: number, codigo: string | null, extra: Partial<Ficha> = {}): Fi
   ...extra
 })
 
-const fichas = [ficha(1, 'M1'), ficha(2, 'M2'), ficha(3, null, { categoria: 'SIN_CATASTRO' })]
-const pagina = { content: fichas, page: 0, size: 50, totalElements: 3, totalPages: 1 }
+const fichas = [
+  ficha(1, 'M1'),
+  ficha(2, 'M2', { estado: 'A_INSPECCIONAR', responsable: 'analista@prueba.test', decidido_en: '2026-10-20T09:00:00', estimado: true, con_geometria: false }),
+  ficha(3, null, { categoria: 'SIN_CATASTRO' })
+]
+// three pages, so the tests can leave the first one
+const pagina = { content: fichas, page: 0, size: 50, totalElements: 120, totalPages: 3 }
 
 const lote = (codigo: string): LoteFeature => ({
   type: 'Feature',
@@ -114,6 +134,7 @@ const rutas = (extra: MockRoute[] = []): MockRoute[] => [
 
 const parametrosDe = (url: string) => new URL(url, 'http://localhost').searchParams
 const llamadas = (f: FetchMock, path: string) => f.calls.filter((c) => c.path.split('?')[0] === path)
+const ultimaDe = (f: FetchMock, path: string) => parametrosDe(llamadas(f, path).at(-1)!.url)
 
 let fetch: FetchMock | null = null
 beforeEach(() => localStorage.clear())
@@ -129,38 +150,60 @@ const abrir = async (extra: MockRoute[] = [], permissions?: { admin: boolean; ob
   return fetch
 }
 
+const irAPagina2 = async (f: FetchMock) => {
+  await userEvent.click(screen.getByRole('button', { name: 'Página siguiente' }))
+  await vi.waitFor(() => expect(ultimaDe(f, '/catastro/brechas/fichas').get('page')).toBe('1'))
+}
+
+const abrirDecision = async (...codigos: string[]) => {
+  for (const c of codigos) await userEvent.click(screen.getByRole('checkbox', { name: `Elegir ${c}` }))
+  await userEvent.click(screen.getByRole('button', { name: 'Decidir…' }))
+  return screen.findByRole('dialog')
+}
+
 describe('BrechasPage', () => {
   it('shows the KPIs and the bars of the corte', async () => {
     await abrir()
-    expect(within(screen.getByRole('group', { name: 'Δ impuesto' })).getByText('S/ 850.50')).toBeInTheDocument()
-    expect(within(screen.getByRole('group', { name: 'Δ confiable' })).getByText('S/ 600.00')).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Diferencia de impuesto' })).getByText('+S/ 850.50')).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Diferencia confiable' })).getByText('+S/ 600.00')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Omisos estimados' })).getByText('3')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Superan 5 UIT' })).getByText('2')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Pendientes de decidir' })).getByText('25')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Con geometría' })).getByText('28')).toBeInTheDocument()
     const categorias = screen.getByRole('list', { name: 'Por categoría' })
     expect(within(categorias).getByText('Omiso')).toBeInTheDocument()
-    expect(within(categorias).getByText('10 · S/ 500.00')).toBeInTheDocument()
+    expect(within(categorias).getByText('10 · +S/ 500.00')).toBeInTheDocument()
     expect(screen.getByTestId('barra-OMISO')).toHaveStyle({ width: '100%' })
     expect(screen.getByTestId('barra-COINCIDE')).toHaveStyle({ width: '50%' })
     expect(within(screen.getByRole('list', { name: 'Por estado' })).getByText('Descartado')).toBeInTheDocument()
     expect(within(screen.getByRole('list', { name: 'Por confianza' })).getByText('Confiable')).toBeInTheDocument()
-    expect(within(screen.getByRole('list', { name: 'Sectores con más Δ impuesto' })).getByText('Sector 02')).toBeInTheDocument()
+    // the sectores: red where catastro would charge more, blue where less
+    const sectores = screen.getByRole('list', { name: 'Sectores con más diferencia de impuesto' })
+    expect(within(sectores).getByText('3 · −S/ 100.00')).toBeInTheDocument()
+    expect(screen.getByTestId('barra-sector-02')).toHaveStyle({ width: '100%', background: DIVERGENTE.sube[2] })
+    expect(screen.getByTestId('barra-sector-05')).toHaveStyle({ width: '25%', background: DIVERGENTE.baja[0] })
     expect(screen.getByTestId('mapa-lotes')).toHaveTextContent('2 lotes')
     // the most recent corte, by default
     expect(parametrosDe(llamadas(fetch!, '/catastro/brechas/panel')[0]!.url).get('corte')).toBe(CORTE_A)
   })
 
-  it('sends each filter to the fichas and the lotes, and the order to the fichas', async () => {
+  it('shows who decided, when, and what the map cannot draw', async () => {
+    await abrir()
+    expect(screen.getByText('por analista@prueba.test el 20/10/2026')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Sin geometría: el lote no aparece en el mapa' })).toBeInTheDocument()
+    expect(screen.getByText('(estimado)')).toBeInTheDocument()
+  })
+
+  it('sends each filter to the fichas, applies them on the map and goes back to the first page', async () => {
     const f = await abrir()
+    await irAPagina2(f)
     await userEvent.click(screen.getByRole('button', { name: 'Omiso' }))
     await userEvent.click(screen.getByRole('button', { name: 'Subvaluado' }))
     await userEvent.click(within(screen.getByRole('group', { name: 'Confianza' })).getByRole('button', { name: 'Dudoso' }))
     await userEvent.click(within(screen.getByRole('group', { name: 'Estado' })).getByRole('button', { name: 'A inspeccionar' }))
     await userEvent.selectOptions(screen.getByLabelText('Supera 5 UIT'), 'true')
     await userEvent.type(screen.getByLabelText('Sector'), '02')
-    await userEvent.type(screen.getByLabelText('Δ mínimo (S/)'), '100')
-    await userEvent.selectOptions(screen.getByLabelText('Orden'), 'delta_asc')
+    await userEvent.type(screen.getByLabelText('Diferencia mínima, en valor absoluto (S/)'), '100')
     const esperado = {
       corte: CORTE_A,
       categoria: 'OMISO,SUBVALUADO',
@@ -171,25 +214,47 @@ describe('BrechasPage', () => {
       min_delta: '100'
     }
     const cumple = (url: string) => Object.entries(esperado).every(([k, v]) => parametrosDe(url).get(k) === v)
-    await vi.waitFor(() =>
-      expect(llamadas(f, '/catastro/brechas/fichas').some((c) => cumple(c.url) && parametrosDe(c.url).get('orden') === 'delta_asc')).toBe(true)
-    )
-    expect(llamadas(f, '/catastro/brechas/lotes').some((c) => cumple(c.url) && !parametrosDe(c.url).has('page'))).toBe(true)
-    const ultima = parametrosDe(llamadas(f, '/catastro/brechas/fichas').at(-1)!.url)
-    expect(ultima.get('page')).toBe('0')
-    expect(ultima.get('size')).toBe('50')
+    await vi.waitFor(() => expect(llamadas(f, '/catastro/brechas/fichas').some((c) => cumple(c.url) && parametrosDe(c.url).get('page') === '0')).toBe(true))
+    // the lotes come by corte and sector; the map filters the rest
+    const lotes = ultimaDe(f, '/catastro/brechas/lotes')
+    expect([...lotes.keys()].sort()).toEqual(['corte', 'sector'])
+    expect(lotes.get('sector')).toBe('02')
+    const filtro = JSON.parse(screen.getByTestId('mapa-filtro').textContent!)
+    expect(filtro).toContainEqual(['in', ['get', 'categoria'], ['literal', ['OMISO', 'SUBVALUADO']]])
+    expect(filtro).toContainEqual(['>=', ['abs', ['to-number', ['get', 'delta_impuesto'], 0]], 100])
+    // the order, the page and the size
+    await irAPagina2(f)
+    await userEvent.selectOptions(screen.getByLabelText('Orden'), 'delta_asc')
+    await vi.waitFor(() => expect(ultimaDe(f, '/catastro/brechas/fichas').get('orden')).toBe('delta_asc'))
+    expect(ultimaDe(f, '/catastro/brechas/fichas').get('page')).toBe('0')
+    await irAPagina2(f)
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Filas' }), '100')
+    await vi.waitFor(() => expect(ultimaDe(f, '/catastro/brechas/fichas').get('size')).toBe('100'))
+    expect(ultimaDe(f, '/catastro/brechas/fichas').get('page')).toBe('0')
     // a filter turned off leaves the query
     await userEvent.click(screen.getByRole('button', { name: 'Omiso' }))
-    await vi.waitFor(() => expect(parametrosDe(llamadas(f, '/catastro/brechas/fichas').at(-1)!.url).get('categoria')).toBe('SUBVALUADO'))
+    await vi.waitFor(() => expect(ultimaDe(f, '/catastro/brechas/fichas').get('categoria')).toBe('SUBVALUADO'))
   })
 
-  it('asks for the other corte when it changes, and clears the selection', async () => {
+  it('clears the selection when a filter changes', async () => {
+    await abrir()
+    await userEvent.click(screen.getByRole('button', { name: 'recuadro M2 M3' }))
+    expect(screen.getByText('2 fichas elegidas')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Omiso' }))
+    expect(screen.getByText('Ninguna ficha elegida')).toBeInTheDocument()
+    expect(screen.getByTestId('mapa-seleccion')).toBeEmptyDOMElement()
+  })
+
+  it('asks for the other corte when it changes, from its first page, and clears the selection', async () => {
     const f = await abrir()
+    await irAPagina2(f)
     await userEvent.click(screen.getByRole('checkbox', { name: 'Elegir M1' }))
     expect(screen.getByTestId('mapa-seleccion')).toHaveTextContent('M1')
     await userEvent.selectOptions(screen.getByLabelText('Corte'), CORTE_B)
     for (const path of ['/catastro/brechas/panel', '/catastro/brechas/fichas', '/catastro/brechas/lotes'])
       await vi.waitFor(() => expect(llamadas(f, path).some((c) => parametrosDe(c.url).get('corte') === CORTE_B)).toBe(true))
+    const deB = llamadas(f, '/catastro/brechas/fichas').filter((c) => parametrosDe(c.url).get('corte') === CORTE_B)
+    expect(deB.every((c) => parametrosDe(c.url).get('page') === '0')).toBe(true)
     expect(screen.getByTestId('mapa-seleccion')).toBeEmptyDOMElement()
     expect(screen.getByRole('option', { name: '01/04/2026 · año 2025' })).toBeInTheDocument()
   })
@@ -207,6 +272,7 @@ describe('BrechasPage', () => {
     // a click on the map replaces the selection
     await userEvent.click(screen.getByRole('button', { name: 'clic M1' }))
     expect(screen.getByTestId('mapa-seleccion')).toHaveTextContent(/^M1$/)
+    expect(screen.getByText('1 ficha elegida')).toBeInTheDocument()
     // the page checkbox takes the fichas that can be chosen
     await userEvent.click(screen.getByRole('checkbox', { name: 'Elegir todas las fichas de la página' }))
     expect(screen.getByTestId('mapa-seleccion')).toHaveTextContent('M1,M2')
@@ -226,10 +292,8 @@ describe('BrechasPage', () => {
       { method: 'POST', path: '/catastro/brechas/decisiones', body: { actualizadas: 1, creadas: 0, errores: [{ codigo: 'M2', error: 'sin ficha' }] } }
     ])
     expect(screen.getByRole('button', { name: 'Decidir…' })).toBeDisabled()
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Elegir M1' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Elegir M2' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Decidir…' }))
-    const dialogo = await screen.findByRole('dialog')
+    const dialogo = await abrirDecision('M1', 'M2')
+    expect(within(dialogo).getByText('2 fichas del año 2026.')).toBeInTheDocument()
     await userEvent.selectOptions(within(dialogo).getByLabelText('Nuevo estado'), 'DESCARTADO')
     await userEvent.type(within(dialogo).getByLabelText('Nota'), 'visto en campo')
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
@@ -263,13 +327,61 @@ describe('BrechasPage', () => {
 
   it('sends a state other than DESCARTADO without a reason', async () => {
     const f = await abrir([{ method: 'POST', path: '/catastro/brechas/decisiones', body: { actualizadas: 0, creadas: 1, errores: [] } }])
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Elegir M1' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Decidir…' }))
-    const dialogo = await screen.findByRole('dialog')
+    const dialogo = await abrirDecision('M1')
+    expect(within(dialogo).getByText('1 ficha del año 2026.')).toBeInTheDocument()
     expect(within(dialogo).queryByLabelText('Motivo del descarte (obligatorio)')).not.toBeInTheDocument()
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
     expect(await within(dialogo).findByText('Actualizadas: 0 · Creadas: 1 · Con error: 0')).toBeInTheDocument()
     expect(f.calls.find((c) => c.method === 'POST')!.body).toEqual({ codigos: ['M1'], anio: 2026, estado: 'A_INSPECCIONAR' })
+  })
+
+  it('starts each opening of the dialog clean', async () => {
+    await abrir()
+    let dialogo = await abrirDecision('M1')
+    await userEvent.selectOptions(within(dialogo).getByLabelText('Nuevo estado'), 'DESCARTADO')
+    await userEvent.type(within(dialogo).getByLabelText('Motivo del descarte (obligatorio)'), 'otro')
+    await userEvent.type(within(dialogo).getByLabelText('Nota'), 'nota vieja')
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Decidir…' }))
+    dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByLabelText('Nuevo estado')).toHaveValue('A_INSPECCIONAR')
+    expect(within(dialogo).getByLabelText('Nota')).toHaveValue('')
+    expect(within(dialogo).queryByLabelText('Motivo del descarte (obligatorio)')).not.toBeInTheDocument()
+  })
+
+  it('does not send more than 500 codes', async () => {
+    const f = await abrir()
+    await userEvent.click(screen.getByRole('button', { name: 'recuadro grande' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Decidir…' }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText('Elige hasta 500 fichas por decisión; hay 501.')).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Guardar decisión' })).toBeDisabled()
+    expect(f.calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('names the field the API refused', async () => {
+    fetch = mockFetch(
+      rutas([
+        {
+          method: 'POST',
+          path: '/catastro/brechas/decisiones',
+          status: 400,
+          body: { title: 'Bad Request', errors: [{ field: 'motivo_descarte', message: 'es obligatorio' }] }
+        }
+      ])
+    )
+    renderWithProviders(<BrechasPage />)
+    await screen.findByRole('cell', { name: 'M1' })
+    const dialogo = await abrirDecision('M1')
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
+    expect(await within(dialogo).findByText('Motivo del descarte: es obligatorio')).toBeInTheDocument()
+  })
+
+  it('says a 403 on the decision is a missing permission', async () => {
+    await abrir([{ method: 'POST', path: '/catastro/brechas/decisiones', status: 403, body: { title: 'Forbidden' } }])
+    const dialogo = await abrirDecision('M1')
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
+    expect(await within(dialogo).findByText('No tienes permiso para decidir sobre las brechas.')).toBeInTheDocument()
   })
 
   it('hides the decision without UPDATE on decision_brecha', async () => {
@@ -283,45 +395,79 @@ describe('BrechasPage', () => {
     expect(screen.getByRole('button', { name: 'Decidir…' })).toBeInTheDocument()
   })
 
-  it('downloads the CSV of the current filters with the Bearer token', async () => {
-    localStorage.setItem('wasichai-test.token', 'tok-ficticio')
-    await abrir()
-    await userEvent.click(screen.getByRole('button', { name: 'Omiso' }))
-    const simulado = globalThis.fetch
-    const pedidos: { url: string; init?: RequestInit }[] = []
-    globalThis.fetch = (async (url: string, init?: RequestInit) => {
-      if (!String(url).includes('fichas.csv')) return simulado(url, init)
-      pedidos.push({ url: String(url), init })
-      return new Response('﻿codigo_catastro\nCC-1\n', {
-        headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="brechas-ica-prueba.csv"' }
-      })
-    }) as typeof globalThis.fetch
-    const crear = vi.fn(() => 'blob:ficticio')
+  describe('CSV', () => {
+    const originales = { crear: URL.createObjectURL, revocar: URL.revokeObjectURL }
+    let pedidos: { url: string; init?: RequestInit }[]
+    let descarga: string
     const revocar = vi.fn()
-    Object.assign(URL, { createObjectURL: crear, revokeObjectURL: revocar })
-    let descarga = ''
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-      descarga = this.download
-    })
-    await userEvent.click(screen.getByRole('button', { name: 'Exportar CSV' }))
-    await vi.waitFor(() => expect(descarga).toBe('brechas-ica-prueba.csv'))
-    expect(pedidos).toHaveLength(1)
-    expect(pedidos[0]!.url.split('?')[0]).toBe('/api/catastro/brechas/fichas.csv')
-    const p = parametrosDe(pedidos[0]!.url)
-    expect(p.get('corte')).toBe(CORTE_A)
-    expect(p.get('categoria')).toBe('OMISO')
-    expect(p.get('orden')).toBe('delta_desc')
-    expect(p.has('page')).toBe(false)
-    expect(new Headers(pedidos[0]!.init?.headers).get('Authorization')).toBe('Bearer tok-ficticio')
-    expect(crear).toHaveBeenCalledOnce()
-    expect(revocar).toHaveBeenCalledWith('blob:ficticio')
-  })
 
-  it('says so when the CSV fails', async () => {
-    await abrir()
-    await userEvent.click(screen.getByRole('button', { name: 'Exportar CSV' }))
-    // the mock has no route for the CSV: a 404
-    expect(await screen.findByText('No se pudo exportar el CSV.')).toBeInTheDocument()
+    // the CSV answers with what the test sets; the rest goes to the mock
+    const servirCsv = (respuesta: () => Response) => {
+      const simulado = globalThis.fetch
+      globalThis.fetch = (async (url: string, init?: RequestInit) => {
+        if (!String(url).includes('fichas.csv')) return simulado(url, init)
+        pedidos.push({ url: String(url), init })
+        return respuesta()
+      }) as typeof globalThis.fetch
+    }
+
+    beforeEach(() => {
+      pedidos = []
+      descarga = ''
+      revocar.mockReset()
+      URL.createObjectURL = () => 'blob:ficticio'
+      URL.revokeObjectURL = revocar
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        descarga = this.download
+      })
+    })
+    afterEach(() => {
+      URL.createObjectURL = originales.crear
+      URL.revokeObjectURL = originales.revocar
+    })
+
+    it('downloads the CSV of the current filters with the Bearer token', async () => {
+      localStorage.setItem('wasichai-test.token', 'tok-ficticio')
+      await abrir()
+      await userEvent.click(screen.getByRole('button', { name: 'Omiso' }))
+      servirCsv(
+        () =>
+          new Response('﻿codigo_catastro\nCC-1\n', {
+            headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="brechas-ica-prueba.csv"' }
+          })
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Exportar CSV' }))
+      await vi.waitFor(() => expect(descarga).toBe('brechas-ica-prueba.csv'))
+      expect(pedidos).toHaveLength(1)
+      expect(pedidos[0]!.url.split('?')[0]).toBe('/api/catastro/brechas/fichas.csv')
+      const p = parametrosDe(pedidos[0]!.url)
+      expect(p.get('corte')).toBe(CORTE_A)
+      expect(p.get('categoria')).toBe('OMISO')
+      expect(p.get('orden')).toBe('delta_desc')
+      expect(p.has('page')).toBe(false)
+      expect(new Headers(pedidos[0]!.init?.headers).get('Authorization')).toBe('Bearer tok-ficticio')
+      await vi.waitFor(() => expect(revocar).toHaveBeenCalledWith('blob:ficticio'))
+    })
+
+    it('names the file after the corte, without characters a file system refuses', async () => {
+      await abrir()
+      servirCsv(() => new Response('x', { headers: { 'Content-Type': 'text/csv' } }))
+      await userEvent.click(screen.getByRole('button', { name: 'Exportar CSV' }))
+      await vi.waitFor(() => expect(descarga).toBe('brechas-ica-prueba_2026-10-18.csv'))
+    })
+
+    it('says so when the CSV fails, and asks to sign in again on a 401', async () => {
+      localStorage.setItem('wasichai-test.token', 'vencido')
+      await abrir()
+      servirCsv(() => new Response(null, { status: 500 }))
+      await userEvent.click(screen.getByRole('button', { name: 'Exportar CSV' }))
+      expect(await screen.findByText('No se pudo exportar el CSV.')).toBeInTheDocument()
+      servirCsv(() => new Response(null, { status: 401 }))
+      await userEvent.click(screen.getByRole('button', { name: 'Exportar CSV' }))
+      expect(await screen.findByText('Tu sesión venció. Vuelve a iniciar sesión para exportar.')).toBeInTheDocument()
+      expect(localStorage.getItem('wasichai-test.token')).toBeNull()
+      expect(descarga).toBe('')
+    })
   })
 
   it('lists the published WMS layers of GeoServer and hands them to the map with their opacity', async () => {
@@ -353,6 +499,7 @@ describe('BrechasPage', () => {
     expect(screen.queryByText('GeoServer no está activo')).not.toBeInTheDocument()
     const opacidad = within(lista).getByRole('slider', { name: 'Opacidad de Lotes' })
     expect(opacidad).toBeDisabled()
+    expect(opacidad).toHaveAttribute('aria-valuetext', '70 %')
     await userEvent.click(within(lista).getByRole('checkbox', { name: 'Lotes' }))
     expect(screen.getByTestId('mapa-wms')).toHaveTextContent('catastro:predio_catastral@0.7')
     fireEvent.change(opacidad, { target: { value: '40' } })
@@ -364,6 +511,14 @@ describe('BrechasPage', () => {
     expect(llamadas(f, '/gis/layers')).toHaveLength(1)
   })
 
+  it('builds a full GetMap for a layer without its own WMS url', async () => {
+    const { urlWms } = await import('./CapasMapa')
+    const capa = { objectName: 'v', geometryName: 'g', label: 'Vías', layerName: 'catastro:tramo_via', published: true, wms: '' }
+    const p = parametrosDe(urlWms(capa, 'http://gs.test/geoserver/catastro/wms')!)
+    expect(Object.fromEntries(p)).toEqual({ service: 'WMS', version: '1.1.1', request: 'GetMap', styles: '', layers: 'catastro:tramo_via' })
+    expect(urlWms(capa, '')).toBeNull()
+  })
+
   it('says GeoServer is off and does not ask for its layers', async () => {
     const f = await abrir()
     expect(await screen.findByText('GeoServer no está activo')).toBeInTheDocument()
@@ -371,13 +526,38 @@ describe('BrechasPage', () => {
     expect(llamadas(f, '/gis/layers')).toHaveLength(0)
   })
 
-  it('turns on the vías with the arancel of the corte year', async () => {
-    const f = await abrir([{ path: '/catastro/vias/aranceles', body: { type: 'FeatureCollection', features: [] } }])
+  it('tells a failing GeoServer from one that is off', async () => {
+    await abrir([{ path: '/gis/services', status: 500, body: { title: 'Error' } }])
+    expect(await screen.findByText('No se pudo consultar GeoServer.')).toBeInTheDocument()
+    expect(screen.queryByText('GeoServer no está activo')).not.toBeInTheDocument()
+  })
+
+  it('turns on the vías with the arancel of the corte year, with their classes in the legend', async () => {
+    const tramo = (valor: number) => ({
+      type: 'Feature',
+      id: `t${valor}`,
+      geometry: { type: 'LineString', coordinates: [] },
+      properties: {
+        cod_via_eje: '1',
+        tip_via: 'CA.',
+        nom_via: 'X',
+        cuadra: '1',
+        lado: 'AMBOS',
+        id_aranc: 'a',
+        asignacion: 'NOMBRE_UNICO',
+        anio: 2026,
+        valor_m2: valor
+      }
+    })
+    const f = await abrir([{ path: '/catastro/vias/aranceles', body: { type: 'FeatureCollection', features: [tramo(100), tramo(200)] } }])
     expect(llamadas(f, '/catastro/vias/aranceles')).toHaveLength(0)
     await userEvent.click(screen.getByRole('checkbox', { name: /Vías con arancel/ }))
-    await vi.waitFor(() => expect(screen.getByTestId('mapa-vias')).toHaveTextContent('0 vías'))
+    await vi.waitFor(() => expect(screen.getByTestId('mapa-vias')).toHaveTextContent('2 vías'))
     expect(parametrosDe(llamadas(f, '/catastro/vias/aranceles')[0]!.url).get('anio')).toBe('2026')
-    expect(within(screen.getByRole('list', { name: 'Leyenda' })).getByText('Vías: valor por m² (2026)')).toBeInTheDocument()
+    const leyenda = screen.getByRole('list', { name: 'Leyenda' })
+    expect(within(leyenda).getByText('Vías: valor por m² (2026)')).toBeInTheDocument()
+    expect(within(leyenda).getByText('Menos de S/ 200')).toBeInTheDocument()
+    expect(within(leyenda).getByText('S/ 200 o más')).toBeInTheDocument()
   })
 
   it('changes the colouring of the lotes and its legend', async () => {
@@ -388,25 +568,42 @@ describe('BrechasPage', () => {
     expect(screen.getByTestId('mapa-colorear')).toHaveTextContent('estado')
     expect(within(leyenda).getByText('A fiscalizar')).toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText('Colorear lotes por'), 'delta')
-    // both lotes have the same Δ: a single class
-    expect(within(leyenda).getByText('Todos los valores')).toBeInTheDocument()
+    expect(within(leyenda).getByText('+S/ 500 o más')).toBeInTheDocument()
+    expect(within(leyenda).getByText('Sin cambio (−S/ 1 a +S/ 1)')).toBeInTheDocument()
+    expect(within(leyenda).getByText('Sin dato (sin levantar)')).toBeInTheDocument()
+  })
+
+  it('says the lotes failed, over the map, and retries them', async () => {
+    const f = await abrir([{ path: '/catastro/brechas/lotes', status: 500, body: { title: 'Error' } }])
+    const alerta = await screen.findByText('No se pudieron cargar los lotes del mapa.')
+    expect(alerta.closest('[role="alert"]')).not.toBeNull()
+    const antes = llamadas(f, '/catastro/brechas/lotes').length
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    await vi.waitFor(() => expect(llamadas(f, '/catastro/brechas/lotes').length).toBeGreaterThan(antes))
   })
 
   it('explains how to load a corte when there is none', async () => {
     fetch = mockFetch([{ path: '/catastro/brechas/cortes', body: [] }])
     renderWithProviders(<BrechasPage />)
-    expect(await screen.findByText('No hay cortes de brecha cargados')).toBeInTheDocument()
+    expect(await screen.findByText('Todavía no hay cortes de brecha cargados')).toBeInTheDocument()
+    expect(screen.getByText(/Pide al equipo técnico/)).toBeInTheDocument()
     expect(screen.getByText('model/importar_corte_brecha.py')).toBeInTheDocument()
     expect(screen.queryByTestId('mapa')).not.toBeInTheDocument()
   })
 
-  it('shows the same empty state when the panel answers 404', async () => {
+  it('keeps the selector when the chosen corte is gone, and goes back to the latest', async () => {
     fetch = mockFetch([
       { path: '/catastro/brechas/cortes', body: cortes },
-      { path: '/catastro/brechas/panel', status: 404, body: { message: 'No hay cortes de brecha cargados' } }
+      { path: '/catastro/brechas/panel', status: 404, body: { message: 'No hay cortes de brecha cargados' } },
+      { path: '/catastro/brechas/fichas', body: pagina },
+      { path: '/catastro/brechas/lotes', body: { type: 'FeatureCollection', features: [] } }
     ])
     renderWithProviders(<BrechasPage />)
-    expect(await screen.findByText('model/importar_corte_brecha.py')).toBeInTheDocument()
+    expect(await screen.findByText('El corte elegido ya no está cargado.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Corte')).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('Corte'), CORTE_B)
+    await userEvent.click(screen.getByRole('button', { name: 'Ver el más reciente' }))
+    expect(screen.getByLabelText('Corte')).toHaveValue(CORTE_A)
   })
 
   it('shows a 403 as a message', async () => {

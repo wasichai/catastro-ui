@@ -2,6 +2,7 @@ import { render } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { wmsTileUrl } from '@wasichai/gis'
 import type { BrechasMapaProps } from './BrechasMapa'
+import type { LoteFeature } from './tipos'
 
 // jsdom has no webgl: a fake maplibre that keeps its sources and layers and lets the test fire its events
 const estado = vi.hoisted(() => ({ mapa: null as null | Record<string, unknown> }))
@@ -16,10 +17,13 @@ vi.mock('maplibre-gl', () => {
     dragPan = { enable: vi.fn(), disable: vi.fn() }
     setPaintProperty = vi.fn()
     setFilter = vi.fn()
+    setFeatureState = vi.fn()
+    opciones: unknown
     setLayoutProperty = vi.fn()
     fitBounds = vi.fn()
     queryRenderedFeatures = vi.fn((): unknown[] => [])
-    constructor() {
+    constructor(opciones: unknown) {
+      this.opciones = opciones
       estado.mapa = this as unknown as Record<string, unknown>
     }
     addControl() {}
@@ -77,6 +81,10 @@ vi.mock('maplibre-gl', () => {
 const { default: BrechasMapa } = await import('./BrechasMapa')
 
 interface Falso {
+  opciones: Record<string, unknown>
+  setFeatureState: ReturnType<typeof vi.fn>
+  fitBounds: ReturnType<typeof vi.fn>
+  dragPan: { enable: ReturnType<typeof vi.fn>; disable: ReturnType<typeof vi.fn> }
   fuentes: Record<string, { setData: ReturnType<typeof vi.fn>; tiles?: string[] }>
   capas: { id: string; antes?: string }[]
   contenedor: HTMLDivElement
@@ -96,9 +104,10 @@ beforeAll(() => {
 })
 
 const base = (extra: Partial<BrechasMapaProps> = {}): BrechasMapaProps => ({
+  corte: 'c1',
   lotes: { type: 'FeatureCollection', features: [] },
+  filtro: null,
   colorear: 'categoria',
-  cortesDelta: [],
   seleccion: [],
   onSeleccionar: vi.fn(),
   vias: undefined,
@@ -106,6 +115,30 @@ const base = (extra: Partial<BrechasMapaProps> = {}): BrechasMapaProps => ({
   cortesVias: [],
   wms: [],
   ...extra
+})
+
+const lote = (codigo: string): LoteFeature => ({
+  type: 'Feature',
+  id: codigo,
+  geometry: {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [-75.7, -14.0],
+        [-75.69, -14.0],
+        [-75.7, -14.01]
+      ]
+    ]
+  },
+  properties: {
+    codigo_municipal: codigo,
+    codigo_catastro: codigo,
+    categoria: 'OMISO',
+    confianza: 'CONFIABLE',
+    delta_impuesto: 10,
+    estado: 'PENDIENTE',
+    supera_5_uit: false
+  }
 })
 
 const cargar = (props: BrechasMapaProps) => {
@@ -119,9 +152,51 @@ beforeEach(() => {
 })
 
 describe('BrechasMapa', () => {
-  it('outlines the selected lotes', () => {
-    cargar(base({ seleccion: ['M1', 'M2'] }))
-    expect(mapa().setFilter).toHaveBeenLastCalledWith('brechas-lotes-seleccion', ['in', ['get', 'codigo_municipal'], ['literal', ['M1', 'M2']]])
+  it('marks the selected lotes by feature-state, without sending the lotes again', () => {
+    const lotes = { type: 'FeatureCollection' as const, features: [lote('M1'), lote('M2')] }
+    const props = base({ lotes, seleccion: ['M1'] })
+    const r = cargar(props)
+    const m = mapa()
+    const setData = m.fuentes['brechas-lotes']!.setData
+    expect(setData).toHaveBeenCalledTimes(1)
+    expect(m.setFeatureState).toHaveBeenCalledWith({ source: 'brechas-lotes', id: 'M1' }, { elegido: true })
+    m.setFeatureState.mockClear()
+    r.rerender(<BrechasMapa {...props} seleccion={['M2']} />)
+    expect(m.setFeatureState).toHaveBeenCalledWith({ source: 'brechas-lotes', id: 'M1' }, { elegido: false })
+    expect(m.setFeatureState).toHaveBeenCalledWith({ source: 'brechas-lotes', id: 'M2' }, { elegido: true })
+    // nor a colouring, a filter or an opacity send them again
+    r.rerender(
+      <BrechasMapa
+        {...props}
+        seleccion={['M2']}
+        colorear="estado"
+        filtro={['==', ['get', 'estado'], 'PENDIENTE']}
+        wms={[{ id: 'a', url: 'http://gs.test/wms?layers=a', opacity: 0.4 }]}
+      />
+    )
+    expect(setData).toHaveBeenCalledTimes(1)
+    expect(m.setPaintProperty).toHaveBeenCalledWith('brechas-lotes-relleno', 'fill-color', expect.arrayContaining(['match', ['get', 'estado']]))
+    for (const capa of ['brechas-lotes-relleno', 'brechas-lotes-borde', 'brechas-lotes-seleccion'])
+      expect(m.setFilter).toHaveBeenCalledWith(capa, ['==', ['get', 'estado'], 'PENDIENTE'])
+    // new lotes do
+    r.rerender(<BrechasMapa {...props} lotes={{ ...lotes }} seleccion={['M2']} />)
+    expect(setData).toHaveBeenCalledTimes(2)
+  })
+
+  it('frames the lotes once, and again for a new corte', () => {
+    const lotes = { type: 'FeatureCollection' as const, features: [lote('M1')] }
+    const r = cargar(base({ lotes }))
+    const m = mapa()
+    expect(m.fitBounds).toHaveBeenCalledTimes(1)
+    r.rerender(<BrechasMapa {...base({ lotes: { ...lotes } })} />)
+    expect(m.fitBounds).toHaveBeenCalledTimes(1)
+    r.rerender(<BrechasMapa {...base({ corte: 'c2', lotes: { ...lotes } })} />)
+    expect(m.fitBounds).toHaveBeenCalledTimes(2)
+  })
+
+  it('turns off maplibre box zoom, which Shift + drag would start', () => {
+    cargar(base())
+    expect(mapa().opciones.boxZoom).toBe(false)
   })
 
   it('selects the lote a click lands on, and adds it with Shift', () => {
@@ -146,6 +221,7 @@ describe('BrechasMapa', () => {
       { properties: {} }
     ])
     m.contenedor.dispatchEvent(new MouseEvent('mousedown', { clientX: 10, clientY: 20, shiftKey: true, button: 0, bubbles: true }))
+    expect(m.dragPan.disable).toHaveBeenCalledOnce()
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 60, clientY: 80 }))
     expect(m.contenedor.querySelector('div[aria-hidden]')).not.toBeNull()
     document.dispatchEvent(new MouseEvent('mouseup', { clientX: 60, clientY: 80 }))
@@ -158,6 +234,30 @@ describe('BrechasMapa', () => {
     )
     expect(onSeleccionar).toHaveBeenCalledWith(['M1', 'M3'], true)
     expect(m.contenedor.querySelector('div[aria-hidden]')).toBeNull()
+    expect(m.dragPan.enable).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a Shift + click without a drag to the click', () => {
+    cargar(base())
+    const m = mapa()
+    m.contenedor.dispatchEvent(new MouseEvent('mousedown', { clientX: 10, clientY: 20, shiftKey: true, button: 0, bubbles: true }))
+    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 11, clientY: 21 }))
+    expect(m.queryRenderedFeatures).not.toHaveBeenCalled()
+    expect(m.dragPan.enable).toHaveBeenCalledOnce()
+  })
+
+  it('lets a vía over the lote take the click while the vías are on', () => {
+    const onSeleccionar = vi.fn()
+    cargar(base({ onSeleccionar, mostrarVias: true }))
+    const m = mapa()
+    m.queryRenderedFeatures.mockReturnValue([{ properties: { cod_via_eje: '1' } }])
+    m.disparar('click', 'brechas-lotes-relleno', {
+      point: [0, 0],
+      lngLat: [0, 0],
+      originalEvent: { shiftKey: false },
+      features: [{ properties: { codigo_municipal: 'M2' } }]
+    })
+    expect(onSeleccionar).not.toHaveBeenCalled()
   })
 
   it('ignores a drag without Shift', () => {

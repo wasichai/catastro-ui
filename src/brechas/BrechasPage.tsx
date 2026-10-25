@@ -1,24 +1,21 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Download, MapPinned } from 'lucide-react'
 import { ApiError, EmptyState, LoadingState, PageHeader, useApiClient, useAuth } from '@wasichai/core'
 import { Alert, Button } from '@wasichai/ui'
-import { clasesDeLeyenda, cortes as calcularCortes, valoresDe } from '../aranceles/colores'
 import { useArancelesVia } from '../aranceles/api'
+import { clasesDeLeyenda, cortes as calcularCortes, valoresDe } from '../comun/colores'
+import { fecha, plural } from '../comun/formato'
+import { CONTROL, ErrorCarga } from '../comun/ui'
 import { FILTROS_VACIOS, descargarCsv, sinCortes, useCortes, useFichas, useLotes, usePanel } from './api'
 import { CapasMapa, Leyenda } from './CapasMapa'
-import { deltasDe, leyendaDe, type Colorear } from './colores'
+import { filtroDeLotes, leyendaDe, type Colorear } from './colores'
 import { DialogoDecision } from './DialogoDecision'
-import { cantidad, Indicadores } from './Indicadores'
+import { Indicadores } from './Indicadores'
 import { FiltrosFichas, TablaFichas } from './TablaFichas'
 import type { CapaWms, Corte, Filtros, Orden } from './tipos'
 
 // maplibre weighs more than the rest of the app: the map loads when the page opens, not with the first bundle
 const BrechasMapa = lazy(() => import('./BrechasMapa'))
-
-const fecha = (iso: string) => {
-  const [a, m, d] = iso.slice(0, 10).split('-')
-  return d && m && a ? `${d}/${m}/${a}` : iso
-}
 
 export const nombreDeCorte = (c: Pick<Corte, 'fecha' | 'anio'>) => `${fecha(c.fecha)} · año ${c.anio}`
 
@@ -27,17 +24,32 @@ function mensajeDeError(error: Error): string {
   return 'No se pudieron cargar las brechas.'
 }
 
+function mensajeDeCsv(error: unknown): string {
+  if (error instanceof ApiError && error.status === 401) return 'Tu sesión venció. Vuelve a iniciar sesión para exportar.'
+  if (error instanceof ApiError && error.status === 403) return 'No tienes permiso para exportar las brechas.'
+  return 'No se pudo exportar el CSV.'
+}
+
 function SinCortes() {
   return (
-    <EmptyState title="No hay cortes de brecha cargados" icon={MapPinned}>
-      <p className="max-w-prose text-sm text-ink-muted">
-        Un corte es la foto de la brecha que srtm publica (docs/informes/brecha). Para verlo aquí, cárgalo en catastro-backend con{' '}
-        <code className="rounded bg-surface-muted px-1 font-mono text-xs">model/importar_corte_brecha.py</code>, que lee la carpeta del corte (manifiesto.json y
-        los Parquet), y vuelve a esta página.
-      </p>
+    <EmptyState title="Todavía no hay cortes de brecha cargados" icon={MapPinned}>
+      <div className="max-w-prose space-y-2 text-sm text-ink-muted">
+        <p>Pide al equipo técnico que cargue el corte más reciente de la brecha; esta página lo mostrará en cuanto esté.</p>
+        <details>
+          <summary className="cursor-pointer">Detalle técnico</summary>
+          <p className="mt-1">
+            El corte es la carpeta que publica srtm (docs/informes/brecha: manifiesto.json y los Parquet). Se carga en catastro-backend con{' '}
+            <code className="rounded bg-surface-muted px-1 font-mono text-xs">model/importar_corte_brecha.py</code>.
+          </p>
+        </details>
+      </div>
     </EmptyState>
   )
 }
+
+const ENCABEZADO = (
+  <PageHeader title="Brechas" subtitle="Lo que la municipalidad cobra frente a lo que levantó el catastro, por corte, y las decisiones sobre cada ficha" />
+)
 
 // «Brechas»: what srtm's brecha found in one corte, on a map and a table, and the decisions taken over its fichas
 export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
@@ -62,20 +74,28 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
 
   const panel = usePanel(corte)
   const fichas = useFichas(corte, filtros, orden, page, size)
-  const lotes = useLotes(corte, filtros)
-  const anio = panel.data?.corte.anio ?? cortes.data?.find((c) => c.clave === corte)?.anio
+  const lotes = useLotes(corte, filtros.sector)
+  // the year of the corte chosen: the list of cortes already has it, so it never lags behind the panel
+  const anio = cortes.data?.find((c) => c.clave === corte)?.anio ?? panel.data?.corte.anio
   const vias = useArancelesVia(anio, mostrarVias)
 
-  const deltas = useMemo(() => deltasDe(lotes.data?.features ?? []), [lotes.data])
-  const cortesDelta = useMemo(() => calcularCortes(deltas), [deltas])
-  const clases = useMemo(() => leyendaDe(colorear, deltas), [colorear, deltas])
+  const filtro = useMemo(() => filtroDeLotes(filtros), [filtros])
+  const clases = useMemo(() => leyendaDe(colorear), [colorear])
   const valoresVias = useMemo(() => valoresDe(vias.data?.features ?? []), [vias.data])
   const cortesVias = useMemo(() => calcularCortes(valoresVias), [valoresVias])
   const lista = useMemo(() => [...seleccion], [seleccion])
 
+  // fewer fichas after a decision or a filter: the page goes back to the last one that exists
+  const totalPaginas = fichas.data?.totalPages
+  useEffect(() => {
+    if (totalPaginas !== undefined && page > 0 && page >= totalPaginas) setPage(Math.max(0, totalPaginas - 1))
+  }, [totalPaginas, page])
+
+  // a new filter clears the selection, so no decision goes over fichas that are no longer on screen
   const cambiarFiltros = (f: Filtros) => {
     setFiltros(f)
     setPage(0)
+    setSeleccion(new Set())
   }
   const elegir = (codigos: string[], agregar: boolean) => setSeleccion((s) => new Set(agregar ? [...s, ...codigos] : codigos))
   const alternar = (codigo: string) =>
@@ -98,43 +118,40 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
     setExportando(true)
     try {
       await descargarCsv(cliente, corte, filtros, orden)
-    } catch {
-      setErrorCsv('No se pudo exportar el CSV.')
+    } catch (e) {
+      setErrorCsv(mensajeDeCsv(e))
     } finally {
       setExportando(false)
     }
   }
 
-  const encabezado = <PageHeader title="Brechas" subtitle="Lo que srtm cobra frente a lo que catastro levantó, por corte, y las decisiones sobre cada ficha" />
-
   if (cortes.isPending)
     return (
       <div className="space-y-3">
-        {encabezado}
+        {ENCABEZADO}
         <LoadingState />
       </div>
     )
-  if (sinCortes(cortes.error) || (cortes.isSuccess && !cortes.data.length) || sinCortes(panel.error))
+  if (sinCortes(cortes.error) || (cortes.isSuccess && !cortes.data.length))
     return (
       <div className="space-y-3">
-        {encabezado}
+        {ENCABEZADO}
         <SinCortes />
       </div>
     )
-  const error = cortes.error ?? panel.error
-  if (error)
+  if (cortes.error)
     return (
       <div className="space-y-3">
-        {encabezado}
-        <p role="alert" className="rounded-md border border-border bg-danger-soft p-3 text-sm text-danger">
-          {mensajeDeError(error)}
-        </p>
+        {ENCABEZADO}
+        <ErrorCarga onReintentar={() => void cortes.refetch()}>{mensajeDeError(cortes.error)}</ErrorCarga>
       </div>
     )
 
+  const cargando = panel.isFetching || fichas.isFetching || lotes.isFetching
+
   return (
     <div className="flex flex-col gap-4">
-      {encabezado}
+      {ENCABEZADO}
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor="corte-brecha" className="text-sm text-ink-muted">
           Corte
@@ -147,7 +164,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
             setPage(0)
             setSeleccion(new Set())
           }}
-          className="h-8 rounded-md border border-border bg-surface px-2 text-sm text-ink"
+          className={CONTROL}
         >
           {cortes.data?.map((c) => (
             <option key={c.clave} value={c.clave}>
@@ -155,19 +172,47 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
             </option>
           ))}
         </select>
-        {(panel.isFetching || fichas.isFetching || lotes.isFetching) && <span className="text-sm text-ink-muted">Cargando…</span>}
+        <span role="status" className="text-sm text-ink-muted">
+          {cargando ? 'Cargando…' : ''}
+        </span>
       </div>
 
-      {panel.data ? <Indicadores panel={panel.data} /> : <LoadingState />}
+      {panel.isError ? (
+        // the corte went away after the list was read: the selector stays, to choose another
+        sinCortes(panel.error) ? (
+          <Alert tone="warning">
+            <span className="flex flex-wrap items-center gap-2">
+              El corte elegido ya no está cargado.
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setCorteElegido(undefined)
+                  void cortes.refetch()
+                }}
+              >
+                Ver el más reciente
+              </Button>
+            </span>
+          </Alert>
+        ) : (
+          <ErrorCarga onReintentar={() => void panel.refetch()}>{mensajeDeError(panel.error)}</ErrorCarga>
+        )
+      ) : panel.data ? (
+        <Indicadores panel={panel.data} />
+      ) : (
+        <LoadingState />
+      )}
 
       <section aria-label="Visor" className="grid gap-3 lg:grid-cols-[16rem_1fr]">
         <CapasMapa colorear={colorear} onColorear={setColorear} mostrarVias={mostrarVias} onMostrarVias={setMostrarVias} anio={anio} wms={wms} onWms={setWms} />
         <div className="relative h-[32rem] overflow-hidden rounded-md border border-border">
           <Suspense fallback={<div className="h-full w-full bg-surface-muted" />}>
             <BrechasMapa
+              corte={corte}
               lotes={lotes.data}
+              filtro={filtro}
               colorear={colorear}
-              cortesDelta={cortesDelta}
               seleccion={lista}
               onSeleccionar={elegir}
               vias={vias.data}
@@ -177,6 +222,11 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
               workerUrl={workerUrl}
             />
           </Suspense>
+          {lotes.isError && (
+            <ErrorCarga className="absolute inset-x-2 top-2" onReintentar={() => void lotes.refetch()}>
+              No se pudieron cargar los lotes del mapa.
+            </ErrorCarga>
+          )}
           <Leyenda colorear={colorear} clases={clases} vias={mostrarVias ? clasesDeLeyenda(cortesVias, valoresVias.length > 0) : null} anio={anio} />
         </div>
       </section>
@@ -185,7 +235,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
         <FiltrosFichas filtros={filtros} onCambio={cambiarFiltros} orden={orden} onOrden={(o) => (setOrden(o), setPage(0))} />
         <div className="flex flex-wrap items-center gap-2">
           <span role="status" className="text-sm text-ink">
-            {seleccion.size ? `${cantidad(seleccion.size)} fichas elegidas` : 'Ninguna ficha elegida'}
+            {seleccion.size ? plural(seleccion.size, 'ficha elegida', 'fichas elegidas') : 'Ninguna ficha elegida'}
           </span>
           {seleccion.size > 0 && (
             <Button variant="ghost" size="sm" onClick={() => setSeleccion(new Set())}>
@@ -194,7 +244,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
           )}
           <span className="flex-1" />
           {puedeDecidir && (
-            <Button size="sm" disabled={!seleccion.size} onClick={() => setDecidiendo(lista)}>
+            <Button size="sm" disabled={!seleccion.size || anio === undefined} onClick={() => setDecidiendo(lista)}>
               Decidir…
             </Button>
           )}
@@ -205,9 +255,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
         </div>
         {errorCsv && <Alert tone="danger">{errorCsv}</Alert>}
         {fichas.isError ? (
-          <p role="alert" className="rounded-md border border-border bg-danger-soft p-3 text-sm text-danger">
-            {mensajeDeError(fichas.error)}
-          </p>
+          <ErrorCarga onReintentar={() => void fichas.refetch()}>{mensajeDeError(fichas.error)}</ErrorCarga>
         ) : (
           <TablaFichas
             pagina={fichas.data}

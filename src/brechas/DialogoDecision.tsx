@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '@wasichai/core'
 import { Alert, Button, Dialog, DialogContent, DialogDescription, DialogTitle, Label, Textarea } from '@wasichai/ui'
+import { cantidad, plural } from '../comun/formato'
 import { useDecidir } from './api'
 import { ETIQUETA_ESTADO } from './colores'
-import { cantidad } from './Indicadores'
 import type { Decision, ResultadoDecision } from './tipos'
 
 // what a decision can move a ficha to; PENDIENTE is where every ficha starts
@@ -21,9 +21,12 @@ export interface DialogoDecisionProps {
   onDecidido: () => void
 }
 
+// the API's field names, as the form calls them
+const CAMPOS: Record<string, string> = { codigos: 'Fichas', anio: 'Año', estado: 'Nuevo estado', nota: 'Nota', motivo_descarte: 'Motivo del descarte' }
+
 function mensajeDeError(error: Error): string {
   if (error instanceof ApiError && error.status === 403) return 'No tienes permiso para decidir sobre las brechas.'
-  if (error instanceof ApiError && error.violations.length) return error.violations.map((v) => `${v.field}: ${v.message}`).join('. ')
+  if (error instanceof ApiError && error.violations.length) return error.violations.map((v) => `${CAMPOS[v.field] ?? v.field}: ${v.message}`).join('. ')
   return 'No se pudo guardar la decisión.'
 }
 
@@ -37,7 +40,11 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
   const decidir = useDecidir()
 
   const cambiarAbierto = (a: boolean) => {
+    // each opening starts clean: state, note and reason of the last one do not carry over
     if (!a) {
+      setEstado('A_INSPECCIONAR')
+      setNota('')
+      setMotivo('')
       setResultado(null)
       setFaltaMotivo(false)
       decidir.reset()
@@ -72,7 +79,7 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
       <DialogContent className="max-w-lg">
         <DialogTitle className="text-lg font-semibold text-ink">Decidir sobre las fichas</DialogTitle>
         <DialogDescription className="mt-1 text-sm text-ink-muted">
-          {`${cantidad(resultado ? resultado.actualizadas + resultado.creadas + resultado.errores.length : codigos.length)} fichas del año ${anio}.`}
+          {`${plural(resultado ? resultado.actualizadas + resultado.creadas + resultado.errores.length : codigos.length, 'ficha', 'fichas')} del año ${anio}.`}
         </DialogDescription>
         {resultado ? (
           <div className="mt-4 space-y-3" role="status" aria-label="Resultado de la decisión">

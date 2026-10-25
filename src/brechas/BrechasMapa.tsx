@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { Map, NavigationControl, Popup, ScaleControl, setWorkerUrl } from 'maplibre-gl'
-import type { ExpressionSpecification, RasterTileSource } from 'maplibre-gl'
+import { Popup } from 'maplibre-gl'
+import type { ExpressionSpecification, Map, RasterTileSource } from 'maplibre-gl'
 import { WMS_TILE_SIZE, wmsTileUrl } from '@wasichai/gis'
-import { ESTILO, limites } from '../aranceles/ArancelesMapa'
-import { DESPLAZAMIENTO, FILTRO_CON_VALOR, FILTRO_SIN_ARANCEL_ANIO, FILTRO_SIN_ASIGNAR, GRIS, colorPorValor } from '../aranceles/colores'
+import { agregarCapasVias, capasDeVias, pintarVias, verVias } from '../aranceles/capasVias'
 import type { TramosCollection } from '../aranceles/tipos'
+import { GRIS } from '../comun/colores'
+import { crearMapaBase, limites } from '../comun/mapa'
 import { COLOR_SELECCION, colorDeLote, type Colorear } from './colores'
 import { popupHtml } from './popup'
 import type { CapaWms, LoteProps, LotesCollection } from './tipos'
@@ -14,15 +15,18 @@ const RELLENO = `${LOTES}-relleno`
 const BORDE = `${LOTES}-borde`
 const SELECCION = `${LOTES}-seleccion`
 const VIAS = 'brechas-vias'
-const CAPAS_VIAS = ['con-valor', 'sin-arancel-anio', 'sin-asignar'].map((id) => `${VIAS}-${id}`)
+const CAPAS_VIAS = capasDeVias(VIAS)
 const WMS = 'brechas-wms-'
 
 const VACIO = { type: 'FeatureCollection' as const, features: [] }
 
 export interface BrechasMapaProps {
+  // a new corte frames the map again
+  corte: string | undefined
   lotes: LotesCollection | undefined
+  // the filters of the table that the map applies itself (filtroDeLotes); null = every lote
+  filtro: ExpressionSpecification | null
   colorear: Colorear
-  cortesDelta: number[]
   // the codigo_municipal of the selected lotes, shared with the table
   seleccion: string[]
   // a click replaces the selection with its lote (adds it with Shift); a Shift + drag box adds every lote inside
@@ -33,8 +37,6 @@ export interface BrechasMapaProps {
   wms: CapaWms[]
   workerUrl?: string
 }
-
-const filtroSeleccion = (codigos: string[]) => ['in', ['get', 'codigo_municipal'], ['literal', codigos]] as unknown as ExpressionSpecification
 
 // GeoServer's layers, as raster tiles in EPSG:3857 under the lotes: the same url gis' own map builds
 function sincronizarWms(m: Map, capas: CapaWms[]) {
@@ -58,67 +60,72 @@ function sincronizarWms(m: Map, capas: CapaWms[]) {
   }
 }
 
-// the lotes of the brecha coloured by the chosen key, the vías with their arancel and GeoServer's WMS layers. the
-// selection is drawn as a dark outline and goes back to the page through onSeleccionar
+// the lotes of the brecha coloured by the chosen key, the vías with their arancel and GeoServer's WMS layers. each
+// prop has its own effect, so a selection or an opacity does not send the lotes to the worker again: the GeoJSON goes
+// only when it changes, the colours and filters by paint and filter, and the selection by feature-state
 export default function BrechasMapa(props: BrechasMapaProps) {
   const contenedor = useRef<HTMLDivElement>(null)
   const mapa = useRef<Map | null>(null)
   const listo = useRef(false)
   const encuadrado = useRef(false)
+  // the codes that have elegido = true in the feature-state
+  const elegidos = useRef(new Set<string>())
   const ultimo = useRef(props)
   ultimo.current = props
 
-  const aplicar = () => {
-    const m = mapa.current
-    if (!m || !listo.current) return
-    const p = ultimo.current
+  const conMapa = (f: (m: Map, p: BrechasMapaProps) => void) => () => {
+    if (mapa.current && listo.current) f(mapa.current, ultimo.current)
+  }
+
+  const marcar = (m: Map, codigo: string, elegido: boolean) => m.setFeatureState({ source: LOTES, id: codigo }, { elegido })
+
+  const aplicarSeleccion = conMapa((m, p) => {
+    const nueva = new Set(p.seleccion)
+    for (const c of elegidos.current) if (!nueva.has(c)) marcar(m, c, false)
+    for (const c of nueva) if (!elegidos.current.has(c)) marcar(m, c, true)
+    elegidos.current = nueva
+  })
+
+  const aplicarLotes = conMapa((m, p) => {
     ;(m.getSource(LOTES) as { setData(d: unknown): void } | undefined)?.setData(p.lotes ?? VACIO)
-    m.setPaintProperty(RELLENO, 'fill-color', colorDeLote(p.colorear, p.cortesDelta))
-    m.setFilter(SELECCION, filtroSeleccion(p.seleccion))
-    ;(m.getSource(VIAS) as { setData(d: unknown): void } | undefined)?.setData(p.mostrarVias && p.vias ? p.vias : VACIO)
-    m.setPaintProperty(`${VIAS}-con-valor`, 'line-color', colorPorValor(p.cortesVias))
-    for (const capa of CAPAS_VIAS) m.setLayoutProperty(capa, 'visibility', p.mostrarVias ? 'visible' : 'none')
-    sincronizarWms(m, p.wms)
+    // the new data may bring lotes that were selected before it came
+    for (const c of elegidos.current) marcar(m, c, true)
     if (p.lotes?.features.length && !encuadrado.current) {
       const caja = limites(p.lotes)
       if (caja) m.fitBounds(caja, { padding: 40, animate: false })
       encuadrado.current = true
     }
-  }
+  })
+
+  const aplicarFiltro = conMapa((m, p) => {
+    for (const capa of [RELLENO, BORDE, SELECCION]) m.setFilter(capa, p.filtro)
+  })
+  const aplicarColor = conMapa((m, p) => m.setPaintProperty(RELLENO, 'fill-color', colorDeLote(p.colorear)))
+  const aplicarVias = conMapa((m, p) => {
+    ;(m.getSource(VIAS) as { setData(d: unknown): void } | undefined)?.setData(p.mostrarVias && p.vias ? p.vias : VACIO)
+    verVias(m, VIAS, p.mostrarVias)
+  })
+  const aplicarCortesVias = conMapa((m, p) => pintarVias(m, VIAS, p.cortesVias))
+  const aplicarWms = conMapa((m, p) => sincronizarWms(m, p.wms))
 
   useEffect(() => {
     if (!contenedor.current || mapa.current) return
-    // gis hands the worker to maplibre only when its own map mounts; this page may open first
-    if (props.workerUrl) {
-      try {
-        setWorkerUrl(props.workerUrl)
-      } catch {
-        // maplibre already has workers: the url it was given before is the one in use
-      }
-    }
     // Shift + drag is the selection box here, not maplibre's box zoom
-    const m = new Map({
-      container: contenedor.current,
-      style: ESTILO,
-      center: [-75.73, -14.07],
-      zoom: 12,
-      boxZoom: false,
-      attributionControl: { compact: true }
-    })
-    m.addControl(new NavigationControl({ showCompass: false }), 'top-right')
-    m.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-left')
+    const { mapa: m, desmontar } = crearMapaBase(contenedor.current, props.workerUrl, { boxZoom: false })
     m.on('load', () => {
-      m.addSource(LOTES, { type: 'geojson', data: VACIO })
+      m.addSource(LOTES, { type: 'geojson', data: VACIO, promoteId: 'codigo_municipal' })
       m.addLayer({ id: RELLENO, type: 'fill', source: LOTES, paint: { 'fill-color': GRIS, 'fill-opacity': 0.6 } })
       m.addLayer({ id: BORDE, type: 'line', source: LOTES, paint: { 'line-color': '#ffffff', 'line-width': 0.5 } })
-      m.addSource(VIAS, { type: 'geojson', data: VACIO })
-      const base = { type: 'line' as const, source: VIAS, layout: { 'line-cap': 'round' as const, 'line-join': 'round' as const } }
-      const paint = { 'line-width': 3, 'line-offset': DESPLAZAMIENTO }
-      m.addLayer({ ...base, id: `${VIAS}-con-valor`, filter: FILTRO_CON_VALOR, paint: { ...paint, 'line-color': GRIS } })
-      m.addLayer({ ...base, id: `${VIAS}-sin-arancel-anio`, filter: FILTRO_SIN_ARANCEL_ANIO, paint: { ...paint, 'line-color': GRIS } })
-      m.addLayer({ ...base, id: `${VIAS}-sin-asignar`, filter: FILTRO_SIN_ASIGNAR, paint: { ...paint, 'line-color': GRIS, 'line-dasharray': [2, 2] } })
-      m.addLayer({ id: SELECCION, type: 'line', source: LOTES, filter: filtroSeleccion([]), paint: { 'line-color': COLOR_SELECCION, 'line-width': 2.5 } })
+      agregarCapasVias(m, VIAS)
+      m.addLayer({
+        id: SELECCION,
+        type: 'line',
+        source: LOTES,
+        paint: { 'line-color': COLOR_SELECCION, 'line-width': 3, 'line-opacity': ['case', ['boolean', ['feature-state', 'elegido'], false], 1, 0] }
+      })
       m.on('click', RELLENO, (e) => {
+        // a vía over the lote opens its own popup
+        if (ultimo.current.mostrarVias && m.queryRenderedFeatures(e.point, { layers: CAPAS_VIAS }).length) return
         const propiedades = e.features?.[0]?.properties as LoteProps | undefined
         if (!propiedades) return
         new Popup({ closeButton: false }).setLngLat(e.lngLat).setHTML(popupHtml(propiedades)).addTo(m)
@@ -127,7 +134,7 @@ export default function BrechasMapa(props: BrechasMapaProps) {
       m.on('mouseenter', RELLENO, () => (m.getCanvas().style.cursor = 'pointer'))
       m.on('mouseleave', RELLENO, () => (m.getCanvas().style.cursor = ''))
       listo.current = true
-      aplicar()
+      for (const aplicar of [aplicarColor, aplicarFiltro, aplicarLotes, aplicarSeleccion, aplicarVias, aplicarCortesVias, aplicarWms]) aplicar()
     })
 
     // the selection box: Shift + drag draws it, and on release every lote under it joins the selection
@@ -150,7 +157,7 @@ export default function BrechasMapa(props: BrechasMapaProps) {
           left: '0',
           pointerEvents: 'none',
           border: `2px dashed ${COLOR_SELECCION}`,
-          background: 'rgba(17, 24, 39, 0.1)'
+          background: 'rgba(209, 0, 209, 0.1)'
         })
         lienzo.appendChild(recuadro)
       }
@@ -169,6 +176,7 @@ export default function BrechasMapa(props: BrechasMapaProps) {
       recuadro = null
       if (!desde || !listo.current) return
       const hasta = punto(e)
+      // a Shift + click is the click's, not a box
       if (Math.abs(hasta[0] - desde[0]) < 3 && Math.abs(hasta[1] - desde[1]) < 3) return
       const codigos = m.queryRenderedFeatures([desde, hasta], { layers: [RELLENO] }).flatMap((f) => {
         const codigo = (f.properties as Partial<LoteProps>).codigo_municipal
@@ -186,22 +194,30 @@ export default function BrechasMapa(props: BrechasMapaProps) {
     }
     lienzo.addEventListener('mousedown', bajar, true)
 
-    const observador = new ResizeObserver(() => m.resize())
-    observador.observe(contenedor.current)
     mapa.current = m
     return () => {
       lienzo.removeEventListener('mousedown', bajar, true)
       document.removeEventListener('mousemove', mover)
       document.removeEventListener('mouseup', soltar)
-      observador.disconnect()
       listo.current = false
       encuadrado.current = false
-      m.remove()
+      elegidos.current = new Set()
+      desmontar()
       mapa.current = null
     }
   }, [])
 
-  useEffect(aplicar, [props.lotes, props.colorear, props.cortesDelta, props.seleccion, props.vias, props.mostrarVias, props.cortesVias, props.wms])
+  // declared before the lotes' effect: the new corte's lotes, when they come, frame the map
+  useEffect(() => {
+    encuadrado.current = false
+  }, [props.corte])
+  useEffect(aplicarLotes, [props.lotes])
+  useEffect(aplicarFiltro, [props.filtro])
+  useEffect(aplicarColor, [props.colorear])
+  useEffect(aplicarSeleccion, [props.seleccion])
+  useEffect(aplicarVias, [props.vias, props.mostrarVias])
+  useEffect(aplicarCortesVias, [props.cortesVias])
+  useEffect(aplicarWms, [props.wms])
 
   return (
     <div

@@ -1,10 +1,8 @@
 import { Card, CardBody } from '@wasichai/ui'
-import { GRIS } from '../aranceles/colores'
-import { COLOR_CATEGORIA, COLOR_CONFIANZA, COLOR_ESTADO, ETIQUETA_CATEGORIA, ETIQUETA_CONFIANZA, ETIQUETA_ESTADO } from './colores'
-import { soles } from './popup'
+import { GRIS } from '../comun/colores'
+import { cantidad, plural, soles } from '../comun/formato'
+import { COLOR_CATEGORIA, COLOR_CONFIANZA, COLOR_ESTADO, ETIQUETA_CATEGORIA, ETIQUETA_CONFIANZA, ETIQUETA_ESTADO, colorDeSigno } from './colores'
 import type { Panel } from './tipos'
-
-export const cantidad = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocaleString('es-PE') : '—')
 
 function Kpi({ etiqueta, valor, detalle }: { etiqueta: string; valor: string; detalle?: string }) {
   return (
@@ -60,7 +58,7 @@ export function Barras({ titulo, barras }: { titulo: string; barras: Barra[] }) 
   )
 }
 
-const fichasYDelta = (fichas: number, delta: unknown) => `${cantidad(fichas)} · ${soles(delta as number | null)}`
+const fichasYDelta = (fichas: number, delta: unknown) => `${cantidad(fichas)} · ${soles(delta as number | null, { signo: true })}`
 
 // the header of the corte: the KPIs and the bars, counted over every ficha of the corte
 export function Indicadores({ panel }: { panel: Panel }) {
@@ -68,10 +66,14 @@ export function Indicadores({ panel }: { panel: Panel }) {
   return (
     <section aria-label="Indicadores del corte" className="space-y-3">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi etiqueta="Δ impuesto" valor={soles(kpis.delta_impuesto)} detalle={`${cantidad(kpis.fichas)} fichas`} />
-        <Kpi etiqueta="Δ confiable" valor={soles(kpis.delta_impuesto_confiable)} detalle="Solo las fichas confiables" />
+        <Kpi
+          etiqueta="Diferencia de impuesto"
+          valor={soles(kpis.delta_impuesto, { signo: true })}
+          detalle={`Catastro − declarado, en ${plural(kpis.fichas, 'ficha', 'fichas')}`}
+        />
+        <Kpi etiqueta="Diferencia confiable" valor={soles(kpis.delta_impuesto_confiable, { signo: true })} detalle="Solo las fichas confiables" />
         <Kpi etiqueta="Omisos estimados" valor={cantidad(kpis.omisos_estimado)} />
-        <Kpi etiqueta="Superan 5 UIT" valor={cantidad(kpis.supera_5_uit)} detalle="Δ de autoavalúo" />
+        <Kpi etiqueta="Superan 5 UIT" valor={cantidad(kpis.supera_5_uit)} detalle="Diferencia de autoavalúo" />
         <Kpi etiqueta="Pendientes de decidir" valor={cantidad(kpis.pendientes)} detalle={`de ${cantidad(kpis.fichas)}`} />
         <Kpi etiqueta="Con geometría" valor={cantidad(kpis.con_geometria)} detalle={`de ${cantidad(kpis.fichas)}`} />
       </div>
@@ -107,13 +109,14 @@ export function Indicadores({ panel }: { panel: Panel }) {
           }))}
         />
         <Barras
-          titulo="Sectores con más Δ impuesto"
+          titulo="Sectores con más diferencia de impuesto"
           barras={panel.top_sectores.map((s, i) => ({
             clave: `sector-${s.sector ?? i}`,
             etiqueta: s.sector ? `Sector ${s.sector}` : 'Sin sector',
             valor: Number(s.delta_impuesto) || 0,
             texto: fichasYDelta(s.fichas, s.delta_impuesto),
-            color: COLOR_CATEGORIA.SOBREVALUADO
+            // red where catastro would charge more, blue where less, as on the map
+            color: colorDeSigno(Number(s.delta_impuesto) || 0)
           }))}
         />
       </div>

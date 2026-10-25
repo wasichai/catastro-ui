@@ -1,7 +1,10 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
-import { ApiError, PageHeader } from '@wasichai/core'
-import { GRIS, clasesDeLeyenda, cortes as calcularCortes, valoresDe } from '../comun/colores'
+import { ApiError, PageHeader, useWasichaiConfig } from '@wasichai/core'
+import { MapLegend, legendItems } from '@wasichai/gis'
+import { GRIS, clasesPorValor, valoresDe } from '../comun/colores'
+import { ZONA_LIMA, anioEn } from '../comun/formato'
 import { CONTROL, ErrorCarga } from '../comun/ui'
+import { AbrirVistaDeMapa } from '../comun/VistaDeMapa'
 import { useArancelesVia } from './api'
 
 // maplibre weighs more than the rest of the app: the map loads when the page opens, not with the first bundle
@@ -19,19 +22,21 @@ function mensajeDeError(error: Error): string {
   return 'No se pudieron cargar los aranceles por vía.'
 }
 
-function Muestra({ color, punteado }: { color: string; punteado?: boolean }) {
-  return <span aria-hidden className="inline-block w-6 shrink-0" style={{ borderTop: `3px ${punteado ? 'dashed' : 'solid'} ${color}` }} />
+// the dashed grey line of the tramos never assigned an arancel, which gis' legend has no swatch for
+function Muestra({ color }: { color: string }) {
+  return <span aria-hidden className="inline-block w-5 shrink-0" style={{ borderTop: `3px dashed ${color}` }} />
 }
 
 export function ArancelesViaPage({ workerUrl }: { workerUrl?: string }) {
-  const actual = new Date().getFullYear()
+  // the year of the app's zone (Lima), the one tramo_via.valor_m2 holds
+  const actual = anioEn(useWasichaiConfig().timeZone ?? ZONA_LIMA)
   const [anio, setAnio] = useState(actual)
   const consulta = useArancelesVia(anio)
   const datos = consulta.data
-  const valores = useMemo(() => valoresDe(datos?.features ?? []), [datos])
-  const hayValores = valores.length > 0
-  const cortes = useMemo(() => calcularCortes(valores), [valores])
-  const leyenda = useMemo(() => clasesDeLeyenda(cortes, hayValores), [cortes, hayValores])
+  const clases = useMemo(() => clasesPorValor(valoresDe(datos?.features ?? [])), [datos])
+  // the year's classes, then the solid grey of the tramos without that year's arancel (gis' legend draws swatches; the
+  // dashed line of «sin asignar» goes in its own entry below)
+  const leyenda = useMemo(() => [...legendItems(clases), { label: `sin arancel ${anio}`, color: GRIS }], [clases, anio])
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -51,31 +56,26 @@ export function ArancelesViaPage({ workerUrl }: { workerUrl?: string }) {
         <span role="status" className="text-sm text-ink-muted">
           {consulta.isFetching ? 'Cargando…' : ''}
         </span>
+        <span className="flex-1" />
+        <AbrirVistaDeMapa objeto="tramo_via" vista="aranceles_valor" title="El valor por m² del año actual, en el mapa de GIS" />
       </div>
       {consulta.isError ? (
         <ErrorCarga>{mensajeDeError(consulta.error)}</ErrorCarga>
       ) : (
         <div className="relative min-h-96 flex-1 overflow-hidden rounded-md border border-border">
           <Suspense fallback={<div className="h-full w-full bg-surface-muted" />}>
-            <ArancelesMapa datos={datos} cortes={cortes} workerUrl={workerUrl} />
+            <ArancelesMapa datos={datos} clases={clases} workerUrl={workerUrl} />
           </Suspense>
-          <ul aria-label="Leyenda" className="absolute bottom-8 left-2 space-y-1 rounded-md border border-border bg-surface/95 p-2 text-xs text-ink shadow">
-            <li className="font-medium">Valor por m² ({anio})</li>
-            {leyenda.map((c) => (
-              <li key={c.etiqueta} className="flex items-center gap-2">
-                <span aria-hidden className="inline-block h-3 w-6 shrink-0 rounded-sm" style={{ background: c.color }} />
-                {c.etiqueta}
-              </li>
-            ))}
-            <li className="flex items-center gap-2">
+          <section
+            aria-label="Leyenda"
+            className="absolute bottom-8 left-2 space-y-1 rounded-md border border-border bg-surface/95 p-2 text-xs text-ink shadow"
+          >
+            <MapLegend title={`Valor por m² (${anio})`} items={leyenda} showOther={false} className="text-xs" />
+            <p className="flex items-center gap-2 text-ink-muted">
               <Muestra color={GRIS} />
-              {`sin arancel ${anio}`}
-            </li>
-            <li className="flex items-center gap-2">
-              <Muestra color={GRIS} punteado />
               sin asignar
-            </li>
-          </ul>
+            </p>
+          </section>
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockFetch, renderWithProviders, type FetchMock, type MockRoute } from '@wasichai/testing'
+import { gisModule } from '@wasichai/gis'
 import { brechasModule } from '../brechasModule'
 import type { BrechasMapaProps } from './BrechasMapa'
 import { BrechasPage } from './BrechasPage'
@@ -114,7 +115,7 @@ const ficha = (i: number, codigo: string | null, extra: Partial<Ficha> = {}): Fi
 
 const fichas = [
   ficha(1, 'M1'),
-  ficha(2, 'M2', { estado: 'A_INSPECCIONAR', responsable: 'analista@prueba.test', decidido_en: '2026-10-20T09:00:00', estimado: true, con_geometria: false }),
+  ficha(2, 'M2', { estado: 'A_INSPECCIONAR', responsable: 'analista@prueba.test', decidido_en: '2026-10-20T03:00:00Z', estimado: true, con_geometria: false }),
   ficha(3, null, { categoria: 'SIN_CATASTRO' }),
   ficha(4, null, { categoria: 'SIN_CATASTRO', codigo_catastro: null, codigo_predio: 'P-9', supera_5_uit: null, confianza: null })
 ]
@@ -224,9 +225,10 @@ describe('BrechasPage', () => {
     expect(within(fila).queryByText('No')).not.toBeInTheDocument()
   })
 
-  it('shows who decided, when, and what the map cannot draw', async () => {
+  it('shows who decided, when (in Lima time), and what the map cannot draw', async () => {
     await abrir()
-    expect(screen.getByText('por analista@prueba.test el 20/10/2026')).toBeInTheDocument()
+    // decidido_en is an instant: 03:00 UTC is 22:00 of the day before in Lima
+    expect(screen.getByText('por analista@prueba.test el 19/10/2026 22:00')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Sin geometría: el lote no aparece en el mapa' })).toBeInTheDocument()
     expect(screen.getByText('(estimado)')).toBeInTheDocument()
   })
@@ -581,6 +583,37 @@ describe('BrechasPage', () => {
     expect(llamadas(f, '/gis/layers')).toHaveLength(1)
   })
 
+  it('lists the layers published with a style by their label and id, telling apart two geometries of an object', async () => {
+    const capa = (objectName: string, geometryName: string, label: string) => ({
+      objectName,
+      geometryName,
+      label,
+      layerName: `catastro:${objectName}_${geometryName}`,
+      published: true,
+      wms: '',
+      wfs: ''
+    })
+    await abrir([
+      {
+        path: '/gis/services',
+        body: { enabled: true, url: 'http://gs.test/geoserver', workspace: 'catastro', wms: 'http://gs.test/geoserver/catastro/wms', wfs: '', wmts: '' }
+      },
+      {
+        path: '/gis/layers',
+        body: [
+          capa('tramo_via', 'geom', 'Tramo de vía'),
+          capa('brecha_ficha', 'lote_geom', 'Ficha de brecha'),
+          capa('brecha_ficha', 'otra_geom', 'Ficha de brecha')
+        ]
+      }
+    ])
+    const lista = await screen.findByRole('list', { name: 'Capas WMS' })
+    expect(within(lista).getByRole('checkbox', { name: 'Tramo de vía' })).toBeInTheDocument()
+    await userEvent.click(within(lista).getByRole('checkbox', { name: 'Ficha de brecha (lote_geom)' }))
+    expect(within(lista).getByRole('checkbox', { name: 'Ficha de brecha (otra_geom)' })).not.toBeChecked()
+    expect(screen.getByTestId('mapa-wms')).toHaveTextContent(/^catastro:brecha_ficha_lote_geom@0.7$/)
+  })
+
   it('builds a full GetMap for a layer without its own WMS url', async () => {
     const { urlWms } = await import('./CapasMapa')
     const capa = { objectName: 'v', geometryName: 'g', label: 'Vías', layerName: 'catastro:tramo_via', published: true, wms: '' }
@@ -632,7 +665,7 @@ describe('BrechasPage', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /Vías con arancel/ }))
     await vi.waitFor(() => expect(screen.getByTestId('mapa-vias')).toHaveTextContent('2 vías'))
     expect(parametrosDe(llamadas(f, '/catastro/vias/aranceles')[0]!.url).get('anio')).toBe('2026')
-    const leyenda = screen.getByRole('list', { name: 'Leyenda' })
+    const leyenda = screen.getByRole('region', { name: 'Leyenda' })
     expect(within(leyenda).getByText('Vías: valor por m² (2026)')).toBeInTheDocument()
     expect(within(leyenda).getByText('Menos de S/ 200')).toBeInTheDocument()
     expect(within(leyenda).getByText('S/ 200 o más')).toBeInTheDocument()
@@ -640,7 +673,7 @@ describe('BrechasPage', () => {
 
   it('changes the colouring of the lotes and its legend', async () => {
     await abrir()
-    const leyenda = screen.getByRole('list', { name: 'Leyenda' })
+    const leyenda = screen.getByRole('region', { name: 'Leyenda' })
     expect(within(leyenda).getByText('Sin catastro')).toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText('Colorear lotes por'), 'estado')
     expect(screen.getByTestId('mapa-colorear')).toHaveTextContent('estado')
@@ -649,6 +682,21 @@ describe('BrechasPage', () => {
     expect(within(leyenda).getByText('+S/ 500 o más')).toBeInTheDocument()
     expect(within(leyenda).getByText('Sin cambio (−S/ 1 a +S/ 1)')).toBeInTheDocument()
     expect(within(leyenda).getByText('Sin dato (sin levantar)')).toBeInTheDocument()
+  })
+
+  it('opens the saved view brechas_categoria in gis, only when it exists', async () => {
+    const vista = { id: 'v2', name: 'brechas_categoria', label: 'Brechas: categoría', objectName: 'brecha_ficha', geometryName: 'lote_geom', style: null }
+    fetch = mockFetch(rutas([{ path: '/gis/objects/brecha_ficha/map-views/brechas_categoria', body: vista }]))
+    const { unmount } = renderWithProviders(<BrechasPage />, { modules: [gisModule()] })
+    const enlace = await screen.findByRole('link', { name: 'Abrir como vista de mapa' })
+    expect(enlace).toHaveAttribute('href', '/gis/map?object=brecha_ficha&geometry=lote_geom&view=brechas_categoria')
+    unmount()
+    fetch.restore()
+    fetch = mockFetch(rutas())
+    renderWithProviders(<BrechasPage />, { modules: [gisModule()] })
+    await screen.findByRole('cell', { name: 'M1' })
+    await vi.waitFor(() => expect(fetch!.calls.some((c) => c.path.includes('/map-views/brechas_categoria'))).toBe(true))
+    expect(screen.queryByRole('link', { name: 'Abrir como vista de mapa' })).not.toBeInTheDocument()
   })
 
   it('says the lotes failed, over the map, and retries them', async () => {

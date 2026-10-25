@@ -1,4 +1,5 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
+import { colorExpression, type StyleClasses } from '@wasichai/gis'
 import { soles } from './formato'
 
 // the sequential palette of the maps (light to dark = cheaper to dearer) and its quantile classes. fixed hex because
@@ -31,33 +32,38 @@ export function valoresDe(features: { properties: object }[], campo = 'valor_m2'
   })
 }
 
-export interface ClaseLeyenda {
-  color: string
-  etiqueta: string
-}
-
 const enteros = (n: number) => soles(n, { minimo: 0, maximo: 0 })
 
-// one legend entry per class, the same colour the map paints it with
-export function clasesDeLeyenda(cortesDados: number[], hayValores = true): ClaseLeyenda[] {
+// the quantile classes of the values in gis' shape (StyleClasses), so the map paints them with gis' colorExpression
+// and the legend lists them with legendItems. they are computed here, not by the server's style-classes: the page
+// shows the arancel of any year, and the year's values come from GET /vias/aranceles, not from a stored field
+export function clasesPorValor(valores: number[], campo = 'valor_m2'): StyleClasses {
+  valores = valores.filter((v) => Number.isFinite(v))
+  const clases: StyleClasses = { by: campo, type: 'quantiles', classes: [] }
   // no values paints every line grey: no class to show
-  if (!hayValores) return []
-  if (!cortesDados.length) return [{ color: PALETA[PALETA.length - 1]!, etiqueta: 'Todos los valores' }]
+  if (!valores.length) return clases
+  // the first class starts at the smallest value: gis' step paints below it as «other»
+  const minimo = Math.floor(valores.reduce((a, b) => Math.min(a, b)))
+  const cortesDados = cortes(valores)
+  if (!cortesDados.length) return { ...clases, classes: [{ color: PALETA[PALETA.length - 1]!, label: 'Todos los valores', min: minimo }] }
   const ultimo = cortesDados.length
-  return Array.from({ length: ultimo + 1 }, (_, i) => ({
-    color: PALETA[i]!,
-    etiqueta:
-      i === 0
-        ? `Menos de ${enteros(cortesDados[0]!)}`
-        : i === ultimo
-          ? `${enteros(cortesDados[ultimo - 1]!)} o más`
-          : `${enteros(cortesDados[i - 1]!)} a menos de ${enteros(cortesDados[i]!)}`
-  }))
+  return {
+    ...clases,
+    classes: Array.from({ length: ultimo + 1 }, (_, i) => ({
+      color: PALETA[i]!,
+      min: i === 0 ? minimo : cortesDados[i - 1]!,
+      ...(i < ultimo ? { max: cortesDados[i]! } : {}),
+      label:
+        i === 0
+          ? `Menos de ${enteros(cortesDados[0]!)}`
+          : i === ultimo
+            ? `${enteros(cortesDados[ultimo - 1]!)} o más`
+            : `${enteros(cortesDados[i - 1]!)} a menos de ${enteros(cortesDados[i]!)}`
+    }))
+  }
 }
 
-// a step on a numeric property over the cuts
-export function colorPorValor(cortesDados: number[], campo = 'valor_m2'): ExpressionSpecification {
-  if (!cortesDados.length) return PALETA[PALETA.length - 1]! as unknown as ExpressionSpecification
-  const pasos = cortesDados.flatMap((corte, i) => [corte, PALETA[i + 1]!])
-  return ['step', ['get', campo], PALETA[0], ...pasos] as unknown as ExpressionSpecification
+// the line colour of the classes: gis' expression, or the darkest colour before there are classes
+export function colorPorValor(clases: StyleClasses | undefined): string | ExpressionSpecification {
+  return clases?.classes.length ? colorExpression(clases) : PALETA[PALETA.length - 1]!
 }

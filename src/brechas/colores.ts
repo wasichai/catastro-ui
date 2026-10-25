@@ -1,5 +1,6 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
-import { GRIS, type ClaseLeyenda } from '../comun/colores'
+import { colorExpression, legendItems, type LegendItem, type StyleClasses } from '@wasichai/gis'
+import { GRIS } from '../comun/colores'
 import { soles } from '../comun/formato'
 import type { Categoria, Confianza, Estado } from './tipos'
 
@@ -84,15 +85,15 @@ export function colorDelta(): ExpressionSpecification {
 const s = (n: number) => soles(n, { minimo: 0, maximo: 0, signo: true })
 
 // the legend of the diverging scale, from the largest rise to the largest drop
-export const LEYENDA_DELTA: ClaseLeyenda[] = [
-  { color: DIVERGENTE.sube[2], etiqueta: `${s(B)} o más` },
-  { color: DIVERGENTE.sube[1], etiqueta: `${s(A)} a ${s(B)}` },
-  { color: DIVERGENTE.sube[0], etiqueta: `${s(UMBRAL)} a ${s(A)}` },
-  { color: DIVERGENTE.neutro, etiqueta: `Sin cambio (${s(-UMBRAL)} a ${s(UMBRAL)})` },
-  { color: DIVERGENTE.baja[2], etiqueta: `${s(-A)} a ${s(-UMBRAL)}` },
-  { color: DIVERGENTE.baja[1], etiqueta: `${s(-B)} a ${s(-A)}` },
-  { color: DIVERGENTE.baja[0], etiqueta: `Menos de ${s(-B)}` },
-  { color: GRIS, etiqueta: 'Sin dato (sin levantar)' }
+export const LEYENDA_DELTA: LegendItem[] = [
+  { color: DIVERGENTE.sube[2], label: `${s(B)} o más` },
+  { color: DIVERGENTE.sube[1], label: `${s(A)} a ${s(B)}` },
+  { color: DIVERGENTE.sube[0], label: `${s(UMBRAL)} a ${s(A)}` },
+  { color: DIVERGENTE.neutro, label: `Sin cambio (${s(-UMBRAL)} a ${s(UMBRAL)})` },
+  { color: DIVERGENTE.baja[2], label: `${s(-A)} a ${s(-UMBRAL)}` },
+  { color: DIVERGENTE.baja[1], label: `${s(-B)} a ${s(-A)}` },
+  { color: DIVERGENTE.baja[0], label: `Menos de ${s(-B)}` },
+  { color: GRIS, label: 'Sin dato (sin levantar)' }
 ]
 
 // the colour of a difference outside the map (the bars of the sectores): the strongest of its side
@@ -113,17 +114,27 @@ const CATEGORICOS = {
   estado: [COLOR_ESTADO, ETIQUETA_ESTADO]
 } as const
 
-// the fill of a lote under each colouring: a match on the key, or the diverging scale of the difference
+// a categorical colouring in gis' shape (StyleClasses): one class per key, with its fixed colour and its label. the
+// saved view brechas_categoria of model/vistas_de_mapa.py carries the same palette
+export function clasesDeLote(modo: Exclude<Colorear, 'delta'>): StyleClasses {
+  const [colores, etiquetas] = CATEGORICOS[modo]
+  return {
+    by: modo,
+    type: 'categories',
+    classes: Object.entries(colores).map(([clave, color]) => ({ value: clave, color, label: (etiquetas as Record<string, string>)[clave]! }))
+  }
+}
+
+// the fill of a lote under each colouring: gis' match on the key (grey for anything else), or the diverging scale of
+// the difference, which is signed and so not one of gis' quantiles
 export function colorDeLote(modo: Colorear): ExpressionSpecification {
   if (modo === 'delta') return colorDelta()
-  return ['match', ['get', modo], ...Object.entries(CATEGORICOS[modo][0]).flat(), GRIS] as unknown as ExpressionSpecification
+  return colorExpression(clasesDeLote(modo)) as ExpressionSpecification
 }
 
 // the legend entries of a colouring, the same colours the map paints with
-export function leyendaDe(modo: Colorear): ClaseLeyenda[] {
-  if (modo === 'delta') return LEYENDA_DELTA
-  const [colores, etiquetas] = CATEGORICOS[modo]
-  return Object.entries(colores).map(([clave, color]) => ({ color, etiqueta: (etiquetas as Record<string, string>)[clave]! }))
+export function leyendaDe(modo: Colorear): LegendItem[] {
+  return modo === 'delta' ? LEYENDA_DELTA : legendItems(clasesDeLote(modo))
 }
 
 // the minimum difference the user typed, when it is a number of 0 or more; the API refuses a negative one

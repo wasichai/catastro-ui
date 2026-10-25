@@ -31,3 +31,33 @@ export function fecha(iso: string | null | undefined): string {
   const [a, m, d] = iso.slice(0, 10).split('-')
   return d && m && a ? `${d}/${m}/${a}` : iso
 }
+
+// the zone catastro-ui shows the instants in when the app config has none: the municipalidad's
+export const ZONA_LIMA = 'America/Lima'
+
+// a DATETIME is an instant: «2026-10-20T03:00:00Z» → «19/10/2026 22:00» in Lima, whatever the browser's zone. one
+// without an offset is UTC, the way Core stores it
+export function fechaHora(iso: string | null | undefined, zona: string = ZONA_LIMA): string {
+  if (!iso) return '—'
+  const conZona = /(Z|[+-]\d{2}:?\d{2})$/i.test(iso) || !iso.includes('T') ? iso : `${iso}Z`
+  const instante = new Date(conZona)
+  if (Number.isNaN(instante.getTime())) return iso
+  const partes = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: zona,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    })
+      .formatToParts(instante)
+      .map((p) => [p.type, p.value])
+  )
+  return `${partes.day}/${partes.month}/${partes.year} ${partes.hour}:${partes.minute}`
+}
+
+// the year in a zone: the 31st of December at 20:00 in Lima is already the next year in UTC
+export const anioEn = (zona: string = ZONA_LIMA, ahora: Date = new Date()) =>
+  Number(new Intl.DateTimeFormat('en-GB', { timeZone: zona, year: 'numeric' }).format(ahora))

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Popup } from 'maplibre-gl'
 import type { Map, RasterTileSource } from 'maplibre-gl'
-import { WMS_TILE_SIZE, wmsTileUrl } from '@wasichai/gis'
+import { WMS_TILE_SIZE, wmsTileUrl, type StyleClasses } from '@wasichai/gis'
 import { agregarCapasVias, capasDeVias, pintarVias, verVias } from '../aranceles/capasVias'
 import type { TramosCollection } from '../aranceles/tipos'
 import { GRIS } from '../comun/colores'
@@ -31,7 +31,7 @@ export interface BrechasMapaProps {
   onSeleccionar: (codigos: string[], agregar: boolean) => void
   vias: TramosCollection | undefined
   mostrarVias: boolean
-  cortesVias: number[]
+  clasesVias: StyleClasses
   wms: CapaWms[]
   workerUrl?: string
 }
@@ -100,7 +100,7 @@ export default function BrechasMapa(props: BrechasMapaProps) {
     ;(m.getSource(VIAS) as { setData(d: unknown): void } | undefined)?.setData(p.mostrarVias && p.vias ? p.vias : VACIO)
     verVias(m, VIAS, p.mostrarVias)
   })
-  const aplicarCortesVias = conMapa((m, p) => pintarVias(m, VIAS, p.cortesVias))
+  const aplicarClasesVias = conMapa((m, p) => pintarVias(m, VIAS, p.clasesVias))
   const aplicarWms = conMapa((m, p) => sincronizarWms(m, p.wms))
 
   useEffect(() => {
@@ -129,7 +129,7 @@ export default function BrechasMapa(props: BrechasMapaProps) {
       m.on('mouseenter', RELLENO, () => (m.getCanvas().style.cursor = 'pointer'))
       m.on('mouseleave', RELLENO, () => (m.getCanvas().style.cursor = ''))
       listo.current = true
-      for (const aplicar of [aplicarColor, aplicarLotes, aplicarSeleccion, aplicarVias, aplicarCortesVias, aplicarWms]) aplicar()
+      for (const aplicar of [aplicarColor, aplicarLotes, aplicarSeleccion, aplicarVias, aplicarClasesVias, aplicarWms]) aplicar()
     })
 
     // the selection box: Shift + drag draws it, and on release every lote under it joins the selection
@@ -210,7 +210,7 @@ export default function BrechasMapa(props: BrechasMapaProps) {
   useEffect(aplicarColor, [props.colorear])
   useEffect(aplicarSeleccion, [props.seleccion])
   useEffect(aplicarVias, [props.vias, props.mostrarVias])
-  useEffect(aplicarCortesVias, [props.cortesVias])
+  useEffect(aplicarClasesVias, [props.clasesVias])
   useEffect(aplicarWms, [props.wms])
 
   return (

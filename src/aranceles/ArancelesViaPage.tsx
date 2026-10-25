@@ -27,8 +27,10 @@ export function ArancelesViaPage({ workerUrl }: { workerUrl?: string }) {
   const [anio, setAnio] = useState(actual)
   const consulta = useArancelesVia(anio)
   const datos = consulta.data
-  const cortes = useMemo(() => calcularCortes(valoresDe(datos?.features ?? [])), [datos])
-  const leyenda = useMemo(() => clasesDeLeyenda(cortes), [cortes])
+  const valores = useMemo(() => valoresDe(datos?.features ?? []), [datos])
+  const hayValores = valores.length > 0
+  const cortes = useMemo(() => calcularCortes(valores), [valores])
+  const leyenda = useMemo(() => clasesDeLeyenda(cortes, hayValores), [cortes, hayValores])
 
   return (
     <div className="flex h-full flex-col gap-3">

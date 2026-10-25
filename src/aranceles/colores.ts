@@ -35,7 +35,9 @@ export interface ClaseLeyenda {
 const soles = (n: number) => `S/ ${n}`
 
 // one legend entry per class, the same colour the map paints it with
-export function clasesDeLeyenda(cortesDados: number[]): ClaseLeyenda[] {
+export function clasesDeLeyenda(cortesDados: number[], hayValores = true): ClaseLeyenda[] {
+  // a year with no values paints every line grey: no class to show
+  if (!hayValores) return []
   if (!cortesDados.length) return [{ color: PALETA[PALETA.length - 1]!, etiqueta: 'Todos los valores' }]
   const ultimo = cortesDados.length
   return Array.from({ length: ultimo + 1 }, (_, i) => ({

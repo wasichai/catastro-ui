@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mockFetch, renderWithProviders, type FetchMock } from '@wasichai/testing'
+import { jsonResponse, mockFetch, renderWithProviders, type FetchMock } from '@wasichai/testing'
 import { arancelesModule } from '../arancelesModule'
 import { aniosDisponibles, ArancelesViaPage } from './ArancelesViaPage'
 import { popupHtml } from './popup'
@@ -72,6 +72,30 @@ describe('ArancelesViaPage', () => {
     expect(await screen.findByText(`sin arancel ${anioActual - 1}`)).toBeInTheDocument()
   })
 
+  it('keeps the lines of the last year while the new one loads, and an empty year has no classes', async () => {
+    fetch = mockFetch([{ path: '/catastro/vias/aranceles', body: coleccion([100, 200]) }])
+    renderWithProviders(<ArancelesViaPage />)
+    await vi.waitFor(() => expect(screen.getByTestId('mapa')).toHaveTextContent('2 tramos'))
+    fetch.restore()
+    // the new year's response waits until the test lets it through
+    let soltar: (r: Response) => void = () => {}
+    const original = globalThis.fetch
+    globalThis.fetch = (() => new Promise<Response>((r) => (soltar = r))) as typeof globalThis.fetch
+    await userEvent.selectOptions(screen.getByLabelText('Año'), String(anioActual - 1))
+    expect(screen.getByTestId('mapa')).toHaveTextContent('2 tramos')
+    soltar(jsonResponse({ type: 'FeatureCollection', features: [tramo(1, null)] }))
+    globalThis.fetch = original
+    const leyenda = screen.getByRole('list', { name: 'Leyenda' })
+    await vi.waitFor(() => expect(screen.getByTestId('mapa')).toHaveTextContent('1 tramos'))
+    expect(within(leyenda).queryByText('Todos los valores')).not.toBeInTheDocument()
+    expect(within(leyenda).queryByText(/^Menos de/)).not.toBeInTheDocument()
+    expect(
+      within(leyenda)
+        .getAllByRole('listitem')
+        .map((l) => l.textContent)
+    ).toEqual([`Valor por m² (${anioActual - 1})`, `sin arancel ${anioActual - 1}`, 'sin asignar'])
+  })
+
   it('shows a 403 as a message instead of the map', async () => {
     fetch = mockFetch([{ path: '/catastro/vias/aranceles', status: 403, body: { message: 'Forbidden' } }])
     renderWithProviders(<ArancelesViaPage />)
@@ -89,6 +113,15 @@ describe('popupHtml', () => {
     expect(html).toContain('Por cercanía')
   })
 
+  it('treats the properties maplibre drops (undefined) like null', () => {
+    const sinNada = { anio: 2026, lado: 'AMBOS', asignacion: 'SIN_ARANCEL' } as unknown as TramoProps
+    const html = popupHtml(sinNada)
+    expect(html).toContain('Vía sin nombre')
+    expect(html).toContain('Sin asignar')
+    expect(html).not.toContain('undefined')
+    expect(popupHtml({ ...sinNada, tip_via: null, nom_via: null, id_aranc: null })).toBe(html)
+  })
+
   it('says why there is no value', () => {
     expect(popupHtml(tramo(1, null).properties)).toContain('Sin arancel 2026')
     expect(popupHtml(tramo(1, null, { id_aranc: null, asignacion: 'SIN_ARANCEL' }).properties)).toContain('Sin asignar')
@@ -97,8 +130,10 @@ describe('popupHtml', () => {
 
 describe('arancelesModule', () => {
   const visible = arancelesModule().nav![0]!.visible!
-  it('shows the menu only to who can READ tramo_via', () => {
-    expect(visible({ admin: false, objects: { tramo_via: ['READ'] } })).toBe(true)
+  it('shows the menu only to who can READ tramo_via and arancel', () => {
+    expect(visible({ admin: false, objects: { tramo_via: ['READ'], arancel: ['READ'] } })).toBe(true)
+    expect(visible({ admin: false, objects: { tramo_via: ['READ'] } })).toBe(false)
+    expect(visible({ admin: false, objects: { arancel: ['READ'] } })).toBe(false)
     expect(visible({ admin: false, objects: { tramo_via: ['CREATE'] } })).toBe(false)
     expect(visible({ admin: false, objects: {} })).toBe(false)
     expect(visible({ admin: true, objects: {} })).toBe(true)

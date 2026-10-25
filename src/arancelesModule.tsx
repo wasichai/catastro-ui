@@ -29,8 +29,9 @@ export function arancelesModule({ workerUrl }: ArancelesModuleOptions = {}): Was
         order: 10,
         icon: Route,
         route: 'vias',
-        // the menu shows only to who can READ tramo_via; an admin can everything
-        visible: (permissions) => !!permissions && (permissions.admin || (permissions.objects.tramo_via ?? []).includes('READ'))
+        // the endpoint reads tramo_via and, for the values, arancel: the menu shows only to who can READ both; an admin can
+        // everything
+        visible: (permissions) => !!permissions && (permissions.admin || ['tramo_via', 'arancel'].every((o) => (permissions.objects[o] ?? []).includes('READ')))
       }
     ],
     i18n: { es: { nav: { aranceles: 'Aranceles', vias: 'Aranceles por vía' } } }

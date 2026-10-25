@@ -2,10 +2,11 @@
 export type Lado = 'AMBOS' | 'IZQUIERDO' | 'DERECHO'
 export type Asignacion = 'NOMBRE_UNICO' | 'CERCANIA' | 'SIN_ARANCEL'
 
+// the backend sends null when the data is missing, and maplibre's tile encoding drops nulls: they arrive as undefined
 export interface TramoProps {
-  cod_via_eje: string
-  tip_via: string
-  nom_via: string
+  cod_via_eje: string | null
+  tip_via: string | null
+  nom_via: string | null
   cuadra: string | null
   lado: Lado
   id_aranc: string | null

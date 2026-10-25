@@ -116,12 +116,19 @@ describe('ArancelesViaPage', () => {
       { path: '/catastro/vias/aranceles', body: coleccion([100]) },
       {
         path: '/gis/objects/tramo_via/map-views/aranceles_valor',
-        body: { id: 'v1', name: 'aranceles_valor', label: 'Aranceles: valor por m²', objectName: 'tramo_via', geometryName: 'geom', style: null }
+        body: {
+          id: 'v1',
+          name: 'aranceles_valor',
+          label: 'Aranceles: valor por m²',
+          objectName: 'tramo_via',
+          geometryName: 'geom',
+          style: { by: 'valor_m2', type: 'quantiles', classes: 5 }
+        }
       }
     ])
     renderWithProviders(<ArancelesViaPage />, { modules: [gisModule()] })
     const enlace = await screen.findByRole('link', { name: 'Abrir como vista de mapa' })
-    expect(enlace).toHaveAttribute('href', '/gis/map?object=tramo_via&geometry=geom&view=aranceles_valor')
+    expect(enlace).toHaveAttribute('href', '/gis/map?object=tramo_via&geometry=geom&view=aranceles_valor&by=valor_m2&type=quantiles&classes=5')
   })
 
   it('has no link to gis while the view does not exist', async () => {

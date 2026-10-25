@@ -111,7 +111,7 @@ const base = (extra: Partial<BrechasMapaProps> = {}): BrechasMapaProps => ({
   onSeleccionar: vi.fn(),
   vias: undefined,
   mostrarVias: false,
-  cortesVias: [],
+  clasesVias: { by: 'valor_m2', type: 'quantiles', classes: [] },
   wms: [],
   ...extra
 })
@@ -166,7 +166,7 @@ describe('BrechasMapa', () => {
     // nor a colouring or an opacity send them again
     r.rerender(<BrechasMapa {...props} seleccion={['M2']} colorear="estado" wms={[{ id: 'a', url: 'http://gs.test/wms?layers=a', opacity: 0.4 }]} />)
     expect(setData).toHaveBeenCalledTimes(1)
-    expect(m.setPaintProperty).toHaveBeenCalledWith('brechas-lotes-relleno', 'fill-color', expect.arrayContaining(['match', ['get', 'estado']]))
+    expect(m.setPaintProperty).toHaveBeenCalledWith('brechas-lotes-relleno', 'fill-color', expect.arrayContaining(['match', ['to-string', ['get', 'estado']]]))
     // new lotes do
     r.rerender(<BrechasMapa {...props} lotes={{ ...lotes }} seleccion={['M2']} />)
     expect(setData).toHaveBeenCalledTimes(2)

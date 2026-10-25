@@ -2,8 +2,10 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { jsonResponse, mockFetch, renderWithProviders, type FetchMock } from '@wasichai/testing'
+import { gisModule } from '@wasichai/gis'
 import { arancelesModule } from '../arancelesModule'
 import { aniosDisponibles, ArancelesViaPage } from './ArancelesViaPage'
+import { anioEn } from '../comun/formato'
 import { popupHtml } from './popup'
 import type { TramoFeature, TramoProps } from './tipos'
 
@@ -44,7 +46,7 @@ const coleccion = (valores: number[]) => ({
 let fetch: FetchMock | null = null
 afterEach(() => fetch?.restore())
 
-const anioActual = new Date().getFullYear()
+const anioActual = anioEn('America/Lima')
 
 describe('ArancelesViaPage', () => {
   it('lists the range of years, the current one by default', () => {
@@ -54,7 +56,8 @@ describe('ArancelesViaPage', () => {
   it('draws the legend from the quantiles of the values, plus the grey entries', async () => {
     fetch = mockFetch([{ path: '/catastro/vias/aranceles', body: coleccion(Array.from({ length: 50 }, (_, i) => 100 + i)) }])
     renderWithProviders(<ArancelesViaPage />)
-    const leyenda = await screen.findByRole('list', { name: 'Leyenda' })
+    const leyenda = await screen.findByRole('region', { name: 'Leyenda' })
+    expect(within(leyenda).getByRole('figure', { name: `Valor por m² (${anioActual})` })).toBeInTheDocument()
     expect(await within(leyenda).findByText('Menos de S/ 110')).toBeInTheDocument()
     expect(within(leyenda).getByText('S/ 140 o más')).toBeInTheDocument()
     expect(within(leyenda).getByText(`sin arancel ${anioActual}`)).toBeInTheDocument()
@@ -85,15 +88,18 @@ describe('ArancelesViaPage', () => {
     expect(screen.getByTestId('mapa')).toHaveTextContent('2 tramos')
     soltar(jsonResponse({ type: 'FeatureCollection', features: [tramo(1, null)] }))
     globalThis.fetch = original
-    const leyenda = screen.getByRole('list', { name: 'Leyenda' })
+    const leyenda = screen.getByRole('region', { name: 'Leyenda' })
     await vi.waitFor(() => expect(screen.getByTestId('mapa')).toHaveTextContent('1 tramos'))
     expect(within(leyenda).queryByText('Todos los valores')).not.toBeInTheDocument()
     expect(within(leyenda).queryByText(/^Menos de/)).not.toBeInTheDocument()
+    // gis' legend, titled with the year, has only the grey of the year without arancel; the dashed «sin asignar» follows
+    const clases = within(leyenda).getByRole('figure', { name: `Valor por m² (${anioActual - 1})` })
     expect(
-      within(leyenda)
+      within(clases)
         .getAllByRole('listitem')
         .map((l) => l.textContent)
-    ).toEqual([`Valor por m² (${anioActual - 1})`, `sin arancel ${anioActual - 1}`, 'sin asignar'])
+    ).toEqual([`sin arancel ${anioActual - 1}`])
+    expect(within(leyenda).getByText('sin asignar')).toBeInTheDocument()
   })
 
   it('keeps the loading status in the page, only its text changes', async () => {
@@ -103,6 +109,27 @@ describe('ArancelesViaPage', () => {
     await screen.findByTestId('mapa')
     await vi.waitFor(() => expect(estado).toBeEmptyDOMElement())
     expect(screen.getByRole('status')).toBe(estado)
+  })
+
+  it('opens the saved view aranceles_valor in gis, when it exists', async () => {
+    fetch = mockFetch([
+      { path: '/catastro/vias/aranceles', body: coleccion([100]) },
+      {
+        path: '/gis/objects/tramo_via/map-views/aranceles_valor',
+        body: { id: 'v1', name: 'aranceles_valor', label: 'Aranceles: valor por m²', objectName: 'tramo_via', geometryName: 'geom', style: null }
+      }
+    ])
+    renderWithProviders(<ArancelesViaPage />, { modules: [gisModule()] })
+    const enlace = await screen.findByRole('link', { name: 'Abrir como vista de mapa' })
+    expect(enlace).toHaveAttribute('href', '/gis/map?object=tramo_via&geometry=geom&view=aranceles_valor')
+  })
+
+  it('has no link to gis while the view does not exist', async () => {
+    fetch = mockFetch([{ path: '/catastro/vias/aranceles', body: coleccion([100]) }])
+    renderWithProviders(<ArancelesViaPage />, { modules: [gisModule()] })
+    await screen.findByTestId('mapa')
+    await vi.waitFor(() => expect(fetch!.calls.some((c) => c.path.includes('/map-views/aranceles_valor'))).toBe(true))
+    expect(screen.queryByRole('link', { name: 'Abrir como vista de mapa' })).not.toBeInTheDocument()
   })
 
   it('shows a 403 as a message instead of the map', async () => {

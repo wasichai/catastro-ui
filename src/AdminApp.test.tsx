@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toAttributes, toFormValues, type FieldMeta } from '@wasichai/core'
 import { mockFetch, type FetchMock } from '@wasichai/testing'
-import { AdminApp } from './AdminApp'
+import { AdminApp, CONFIG } from './AdminApp'
 
 // jsdom has no webgl: a map that never loads is enough (vite.config.ts inlines @wasichai/gis so it gets this mock)
 vi.mock('maplibre-gl', () => {
@@ -46,5 +47,21 @@ describe('admin', () => {
     for (const label of ['Workflows', 'Páginas', 'Formularios', 'Documentos']) {
       expect(screen.queryByRole('link', { name: label })).not.toBeInTheDocument()
     }
+  })
+})
+
+describe('config', () => {
+  const campo = { name: 'decidido_en', type: 'DATETIME', editable: true } as FieldMeta
+
+  it('says the model lives in the repository', () => {
+    expect(CONFIG.modelInRepository).toBe(true)
+  })
+
+  it('reads and writes the DATETIME fields as Lima wall time, whatever the zone of the browser', () => {
+    expect(CONFIG.timeZone).toBe('America/Lima')
+    const opciones = { timeZone: CONFIG.timeZone }
+    // 22:00 in Lima is 03:00 UTC of the next day
+    expect(toAttributes([campo], { decidido_en: '2026-10-19T22:00' }, opciones)).toEqual({ decidido_en: '2026-10-20T03:00:00.000Z' })
+    expect(toFormValues([campo], { decidido_en: '2026-10-20T03:00:00Z' }, opciones)).toEqual({ decidido_en: '2026-10-19T22:00' })
   })
 })

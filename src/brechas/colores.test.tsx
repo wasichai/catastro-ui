@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { GRIS } from '../comun/colores'
 import { FILTROS_VACIOS, parametros } from './api'
-import { COLOR_CATEGORIA, DIVERGENTE, colorDeLote, leyendaDe } from './colores'
+import { colorExpression } from '@wasichai/gis'
+import { COLOR_CATEGORIA, DIVERGENTE, clasesDeLote, colorDeLote, leyendaDe } from './colores'
 import { popupHtml } from './popup'
 import type { LoteProps } from './tipos'
 
@@ -17,9 +18,11 @@ function pasoDe(valor: number): string {
 describe('colorDeLote', () => {
   it('matches the category against the fixed palette, grey for anything else', () => {
     const expresion = colorDeLote('categoria') as unknown[]
-    expect(expresion.slice(0, 2)).toEqual(['match', ['get', 'categoria']])
-    expect(expresion).toContain(COLOR_CATEGORIA.OMISO)
-    expect(expresion.at(-1)).toBe(GRIS)
+    expect(expresion).toEqual(colorExpression(clasesDeLote('categoria')))
+    expect(expresion.slice(0, 2)).toEqual(['match', ['to-string', ['get', 'categoria']]])
+    expect(expresion.slice(2, 4)).toEqual(['OMISO', COLOR_CATEGORIA.OMISO])
+    // gis' grey for anything else
+    expect(expresion.at(-1)).toBe('#9e9e9e')
   })
 
   it('paints the difference on a diverging scale centred on 0: red up, blue down, near white for no change', () => {
@@ -41,11 +44,11 @@ describe('colorDeLote', () => {
 
 describe('leyendaDe', () => {
   it('has an entry per category, in the palette colours', () => {
-    expect(leyendaDe('confianza').map((c) => c.etiqueta)).toEqual(['Confiable', 'Dudoso', 'Sin levantar'])
+    expect(leyendaDe('confianza').map((c) => c.label)).toEqual(['Confiable', 'Dudoso', 'Sin levantar'])
   })
 
   it('names the symmetric classes of the difference with their sign, the same whatever the data', () => {
-    expect(leyendaDe('delta').map((c) => c.etiqueta)).toEqual([
+    expect(leyendaDe('delta').map((c) => c.label)).toEqual([
       '+S/ 500 o más',
       '+S/ 50 a +S/ 500',
       '+S/ 1 a +S/ 50',

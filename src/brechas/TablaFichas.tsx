@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { MapPinOff } from 'lucide-react'
 import { Badge, Input, PageSizePagination, Table, Td, Th } from '@wasichai/ui'
-import { fecha, soles } from '../comun/formato'
+import { useWasichaiConfig } from '@wasichai/core'
+import { ZONA_LIMA, fechaHora, soles } from '../comun/formato'
 import { CONTROL } from '../comun/ui'
 import {
   COLOR_CATEGORIA,
@@ -170,8 +171,8 @@ export function FiltrosFichas({
 
 const SIN_GEOMETRIA = 'Sin geometría: el lote no aparece en el mapa'
 
-// who decided and when, under the state
-const decision = (f: Ficha) => [f.responsable && `por ${f.responsable}`, `el ${fecha(f.decidido_en)}`].filter(Boolean).join(' ')
+// who decided and when, under the state: decidido_en is an instant, shown in the app's zone (Lima)
+const decision = (f: Ficha, zona: string) => [f.responsable && `por ${f.responsable}`, `el ${fechaHora(f.decidido_en, zona)}`].filter(Boolean).join(' ')
 
 const ubicacion = (f: Ficha) => [f.sector, f.manzana, f.lote].map((x) => x ?? '—').join('-')
 
@@ -189,6 +190,7 @@ export interface TablaFichasProps {
 // the fichas of the corte, a page at a time. the checkboxes are the same selection as the map's; a ficha without
 // codigo_municipal cannot be chosen, since a decision is kept by that code
 export function TablaFichas({ pagina, seleccion, onAlternar, onElegirPagina, page, size, onPage, onSize }: TablaFichasProps) {
+  const zona = useWasichaiConfig().timeZone ?? ZONA_LIMA
   const filas = pagina?.content ?? []
   const elegibles = filas.flatMap((f) => (f.codigo_municipal ? [f.codigo_municipal] : []))
   const todas = elegibles.length > 0 && elegibles.every((c) => seleccion.has(c))
@@ -285,7 +287,7 @@ export function TablaFichas({ pagina, seleccion, onAlternar, onElegirPagina, pag
                   <Td>{f.supera_5_uit === null || f.supera_5_uit === undefined ? '—' : f.supera_5_uit ? 'Sí' : 'No'}</Td>
                   <Td title={f.nota ?? undefined}>
                     {ETIQUETA_ESTADO[f.estado] ?? f.estado}
-                    {f.decidido_en && <span className="block text-xs text-ink-muted">{decision(f)}</span>}
+                    {f.decidido_en && <span className="block text-xs text-ink-muted">{decision(f, zona)}</span>}
                   </Td>
                 </tr>
               )

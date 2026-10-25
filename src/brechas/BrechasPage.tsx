@@ -3,9 +3,11 @@ import { Download, MapPinned } from 'lucide-react'
 import { ApiError, EmptyState, LoadingState, PageHeader, useApiClient, useAuth } from '@wasichai/core'
 import { Alert, Button } from '@wasichai/ui'
 import { useArancelesVia } from '../aranceles/api'
-import { clasesDeLeyenda, cortes as calcularCortes, valoresDe } from '../comun/colores'
+import { legendItems } from '@wasichai/gis'
+import { clasesPorValor, valoresDe } from '../comun/colores'
 import { fecha, plural } from '../comun/formato'
 import { CONTROL, ErrorCarga } from '../comun/ui'
+import { AbrirVistaDeMapa } from '../comun/VistaDeMapa'
 import { FILTROS_VACIOS, descargarCsv, sinCortes, useCortes, useFichas, useLotes, usePanel } from './api'
 import { CapasMapa, Leyenda } from './CapasMapa'
 import { leyendaDe, type Colorear } from './colores'
@@ -80,8 +82,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
   const vias = useArancelesVia(anio, mostrarVias)
 
   const clases = useMemo(() => leyendaDe(colorear), [colorear])
-  const valoresVias = useMemo(() => valoresDe(vias.data?.features ?? []), [vias.data])
-  const cortesVias = useMemo(() => calcularCortes(valoresVias), [valoresVias])
+  const clasesVias = useMemo(() => clasesPorValor(valoresDe(vias.data?.features ?? [])), [vias.data])
   const lista = useMemo(() => [...seleccion], [seleccion])
 
   // fewer fichas after a decision or a filter: the page goes back to the last one that exists
@@ -174,6 +175,9 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
         <span role="status" className="text-sm text-ink-muted">
           {cargando ? 'Cargando…' : ''}
         </span>
+        <span className="flex-1" />
+        {/* the loader keeps the lotes only on the fichas of the latest corte: the view is that corte, whichever is chosen */}
+        <AbrirVistaDeMapa objeto="brecha_ficha" vista="brechas_categoria" title="Las fichas del corte más reciente por categoría, en el mapa de GIS" />
       </div>
 
       {panel.isError ? (
@@ -216,7 +220,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
               onSeleccionar={elegir}
               vias={vias.data}
               mostrarVias={mostrarVias}
-              cortesVias={cortesVias}
+              clasesVias={clasesVias}
               wms={wms}
               workerUrl={workerUrl}
             />
@@ -226,7 +230,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
               No se pudieron cargar los lotes del mapa.
             </ErrorCarga>
           )}
-          <Leyenda colorear={colorear} clases={clases} vias={mostrarVias ? clasesDeLeyenda(cortesVias, valoresVias.length > 0) : null} anio={anio} />
+          <Leyenda colorear={colorear} clases={clases} vias={mostrarVias ? legendItems(clasesVias) : null} anio={anio} />
         </div>
       </section>
 

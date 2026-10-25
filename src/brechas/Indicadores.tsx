@@ -72,7 +72,7 @@ export function Indicadores({ panel }: { panel: Panel }) {
           detalle={`Catastro − declarado, en ${plural(kpis.fichas, 'ficha', 'fichas')}`}
         />
         <Kpi etiqueta="Diferencia confiable" valor={soles(kpis.delta_impuesto_confiable, { signo: true })} detalle="Solo las fichas confiables" />
-        <Kpi etiqueta="Omisos estimados" valor={cantidad(kpis.omisos_estimado)} />
+        <Kpi etiqueta="Omisos estimados" valor={soles(kpis.omisos_estimado, { signo: true })} />
         <Kpi etiqueta="Superan 5 UIT" valor={cantidad(kpis.supera_5_uit)} detalle="Diferencia de autoavalúo" />
         <Kpi
           etiqueta="Pendientes de decidir"

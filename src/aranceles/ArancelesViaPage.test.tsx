@@ -105,6 +105,11 @@ describe('ArancelesViaPage', () => {
 })
 
 describe('popupHtml', () => {
+  it('names the LOTES assignment as one to review', () => {
+    const html = popupHtml(tramo(1, 109, { asignacion: 'LOTES', id_aranc: '0010012500-00' }).properties)
+    expect(html).toContain('Por los lotes de la urbanización (revisar)')
+  })
+
   it('has the name, the SAT code, the value per m² and the assignment', () => {
     const html = popupHtml(tramo(1, 356, { nom_via: 'LIMA <1>', asignacion: 'CERCANIA', id_aranc: '0010000401-01' }).properties)
     expect(html).toContain('CA. LIMA &lt;1&gt;')

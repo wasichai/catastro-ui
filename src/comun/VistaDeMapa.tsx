@@ -16,6 +16,18 @@ export function useVistaDeMapa(objeto: string, nombre: string) {
   })
 }
 
+// the map page's query for a saved view. @wasichai/gis 1.2.0 loads ?view= but does not colour the map from the
+// view's style, while ?by=&type=&classes= does: the view's style goes in the url too
+export function enlaceDeVista(vista: MapViewRecord): Record<string, string> {
+  const q: Record<string, string> = { object: vista.objectName, geometry: vista.geometryName, view: vista.name }
+  if (vista.style) {
+    q.by = vista.style.by
+    q.type = vista.style.type
+    if (vista.style.classes) q.classes = String(vista.style.classes)
+  }
+  return q
+}
+
 // «Abrir como vista de mapa»: gis' map page with the saved view, its colours and its legend. hidden while the view is
 // not there, or when the app has no gis map page
 export function AbrirVistaDeMapa({ objeto, vista, title }: { objeto: string; vista: string; title?: string }) {
@@ -24,7 +36,7 @@ export function AbrirVistaDeMapa({ objeto, vista, title }: { objeto: string; vis
   if (!data || !links.has('gis:map')) return null
   return (
     <Button variant="secondary" size="sm" asChild>
-      <Link to={links.to('gis:map', {}, { object: data.objectName, geometry: data.geometryName, view: data.name })} title={title}>
+      <Link to={links.to('gis:map', {}, enlaceDeVista(data))} title={title}>
         <IconoMapa aria-hidden className="h-4 w-4" />
         Abrir como vista de mapa
       </Link>

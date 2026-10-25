@@ -685,11 +685,18 @@ describe('BrechasPage', () => {
   })
 
   it('opens the saved view brechas_categoria in gis, only when it exists', async () => {
-    const vista = { id: 'v2', name: 'brechas_categoria', label: 'Brechas: categoría', objectName: 'brecha_ficha', geometryName: 'lote_geom', style: null }
+    const vista = {
+      id: 'v2',
+      name: 'brechas_categoria',
+      label: 'Brechas: categoría',
+      objectName: 'brecha_ficha',
+      geometryName: 'lote_geom',
+      style: { by: 'categoria', type: 'categories' }
+    }
     fetch = mockFetch(rutas([{ path: '/gis/objects/brecha_ficha/map-views/brechas_categoria', body: vista }]))
     const { unmount } = renderWithProviders(<BrechasPage />, { modules: [gisModule()] })
     const enlace = await screen.findByRole('link', { name: 'Abrir como vista de mapa' })
-    expect(enlace).toHaveAttribute('href', '/gis/map?object=brecha_ficha&geometry=lote_geom&view=brechas_categoria')
+    expect(enlace).toHaveAttribute('href', '/gis/map?object=brecha_ficha&geometry=lote_geom&view=brechas_categoria&by=categoria&type=categories')
     unmount()
     fetch.restore()
     fetch = mockFetch(rutas())

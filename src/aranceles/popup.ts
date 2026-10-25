@@ -3,6 +3,7 @@ import type { Asignacion, TramoProps } from './tipos'
 const ASIGNACION: Record<Asignacion, string> = {
   NOMBRE_UNICO: 'Por nombre de la vía',
   CERCANIA: 'Por cercanía',
+  LOTES: 'Por los lotes de la urbanización (revisar)',
   SIN_ARANCEL: 'Sin asignar'
 }
 

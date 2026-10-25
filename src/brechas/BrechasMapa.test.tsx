@@ -106,7 +106,6 @@ beforeAll(() => {
 const base = (extra: Partial<BrechasMapaProps> = {}): BrechasMapaProps => ({
   corte: 'c1',
   lotes: { type: 'FeatureCollection', features: [] },
-  filtro: null,
   colorear: 'categoria',
   seleccion: [],
   onSeleccionar: vi.fn(),
@@ -164,20 +163,10 @@ describe('BrechasMapa', () => {
     r.rerender(<BrechasMapa {...props} seleccion={['M2']} />)
     expect(m.setFeatureState).toHaveBeenCalledWith({ source: 'brechas-lotes', id: 'M1' }, { elegido: false })
     expect(m.setFeatureState).toHaveBeenCalledWith({ source: 'brechas-lotes', id: 'M2' }, { elegido: true })
-    // nor a colouring, a filter or an opacity send them again
-    r.rerender(
-      <BrechasMapa
-        {...props}
-        seleccion={['M2']}
-        colorear="estado"
-        filtro={['==', ['get', 'estado'], 'PENDIENTE']}
-        wms={[{ id: 'a', url: 'http://gs.test/wms?layers=a', opacity: 0.4 }]}
-      />
-    )
+    // nor a colouring or an opacity send them again
+    r.rerender(<BrechasMapa {...props} seleccion={['M2']} colorear="estado" wms={[{ id: 'a', url: 'http://gs.test/wms?layers=a', opacity: 0.4 }]} />)
     expect(setData).toHaveBeenCalledTimes(1)
     expect(m.setPaintProperty).toHaveBeenCalledWith('brechas-lotes-relleno', 'fill-color', expect.arrayContaining(['match', ['get', 'estado']]))
-    for (const capa of ['brechas-lotes-relleno', 'brechas-lotes-borde', 'brechas-lotes-seleccion'])
-      expect(m.setFilter).toHaveBeenCalledWith(capa, ['==', ['get', 'estado'], 'PENDIENTE'])
     // new lotes do
     r.rerender(<BrechasMapa {...props} lotes={{ ...lotes }} seleccion={['M2']} />)
     expect(setData).toHaveBeenCalledTimes(2)

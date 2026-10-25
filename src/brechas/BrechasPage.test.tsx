@@ -14,7 +14,6 @@ vi.mock('./BrechasMapa', () => ({
     <div data-testid="mapa">
       <span data-testid="mapa-lotes">{p.lotes?.features.length ?? 0} lotes</span>
       <span data-testid="mapa-seleccion">{p.seleccion.join(',')}</span>
-      <span data-testid="mapa-filtro">{JSON.stringify(p.filtro)}</span>
       <span data-testid="mapa-wms">{p.wms.map((w) => `${w.id}@${w.opacity}`).join(',')}</span>
       <span data-testid="mapa-vias">{p.mostrarVias ? `${p.vias?.features.length ?? 0} vías` : 'sin vías'}</span>
       <span data-testid="mapa-colorear">{p.colorear}</span>
@@ -54,7 +53,16 @@ const cortes: Corte[] = [
 
 const panel = (anio = 2026, clave = CORTE_A): Panel => ({
   corte: { clave, fecha: '2026-10-18', anio, corrida: 'r2' },
-  kpis: { fichas: 30, delta_impuesto: 850.5, delta_impuesto_confiable: 600, omisos_estimado: 3, supera_5_uit: 2, pendientes: 25, con_geometria: 28 },
+  kpis: {
+    fichas: 30,
+    delta_impuesto: 850.5,
+    delta_impuesto_confiable: 600,
+    omisos_estimado: 3,
+    supera_5_uit: 2,
+    pendientes: 25,
+    con_geometria: 28,
+    sin_ficha: 4
+  },
   por_categoria: [
     { clave: 'OMISO', fichas: 10, delta_impuesto: 500 },
     { clave: 'COINCIDE', fichas: 5, delta_impuesto: 0 }
@@ -183,7 +191,10 @@ describe('BrechasPage', () => {
     expect(within(screen.getByRole('group', { name: 'Diferencia confiable' })).getByText('+S/ 600.00')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Omisos estimados' })).getByText('3')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Superan 5 UIT' })).getByText('2')).toBeInTheDocument()
-    expect(within(screen.getByRole('group', { name: 'Pendientes de decidir' })).getByText('25')).toBeInTheDocument()
+    const pendientes = within(screen.getByRole('group', { name: 'Pendientes de decidir' }))
+    expect(pendientes.getByText('25')).toBeInTheDocument()
+    // out of the fichas that have a codigo_municipal
+    expect(pendientes.getByText('de 26 con ficha · 4 fichas sin código municipal')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Con geometría' })).getByText('28')).toBeInTheDocument()
     const categorias = screen.getByRole('list', { name: 'Por categoría' })
     expect(within(categorias).getByText('Omiso')).toBeInTheDocument()
@@ -241,13 +252,9 @@ describe('BrechasPage', () => {
     }
     const cumple = (url: string) => Object.entries(esperado).every(([k, v]) => parametrosDe(url).get(k) === v)
     await vi.waitFor(() => expect(llamadas(f, '/catastro/brechas/fichas').some((c) => cumple(c.url) && parametrosDe(c.url).get('page') === '0')).toBe(true))
-    // the lotes come by corte and sector; the map filters the rest
-    const lotes = ultimaDe(f, '/catastro/brechas/lotes')
-    expect([...lotes.keys()].sort()).toEqual(['corte', 'sector'])
-    expect(lotes.get('sector')).toBe('02')
-    const filtro = JSON.parse(screen.getByTestId('mapa-filtro').textContent!)
-    expect(filtro).toContainEqual(['in', ['get', 'categoria'], ['literal', ['OMISO', 'SUBVALUADO']]])
-    expect(filtro).toContainEqual(['all', ['==', ['typeof', ['get', 'delta_impuesto']], 'number'], ['>=', ['abs', ['get', 'delta_impuesto']], 100]])
+    // the lotes get the same filters, so the server shows a lote when any of its fichas matches; never a page
+    await vi.waitFor(() => expect(llamadas(f, '/catastro/brechas/lotes').some((c) => cumple(c.url))).toBe(true))
+    expect(llamadas(f, '/catastro/brechas/lotes').some((c) => parametrosDe(c.url).has('page') || parametrosDe(c.url).has('size'))).toBe(false)
     // the order, the page and the size
     await irAPagina2(f)
     await userEvent.selectOptions(screen.getByLabelText('Orden'), 'delta_asc')
@@ -260,6 +267,13 @@ describe('BrechasPage', () => {
     // a filter turned off leaves the query
     await userEvent.click(screen.getByRole('button', { name: 'Omiso' }))
     await vi.waitFor(() => expect(ultimaDe(f, '/catastro/brechas/fichas').get('categoria')).toBe('SUBVALUADO'))
+  })
+
+  it('says the Pendiente filter includes the fichas without codigo_municipal, which cannot be decided', async () => {
+    await abrir()
+    expect(screen.queryByText(/sin código municipal, que no se pueden decidir/)).not.toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('group', { name: 'Estado' })).getByRole('button', { name: 'Pendiente' }))
+    expect(screen.getByText('Incluye 4 fichas sin código municipal, que no se pueden decidir.')).toBeInTheDocument()
   })
 
   it('clears the selection when a filter changes', async () => {
@@ -322,6 +336,7 @@ describe('BrechasPage', () => {
     expect(within(dialogo).getByText('2 fichas del año 2026.')).toBeInTheDocument()
     await userEvent.selectOptions(within(dialogo).getByLabelText('Nuevo estado'), 'DESCARTADO')
     await userEvent.type(within(dialogo).getByLabelText('Nota'), 'visto en campo')
+    expect(within(dialogo).getByLabelText('Motivo del descarte (obligatorio)')).toHaveAttribute('maxlength', '2000')
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
     expect(within(dialogo).getByRole('alert')).toHaveTextContent('Escribe el motivo del descarte.')
     expect(f.calls.some((c) => c.method === 'POST')).toBe(false)
@@ -365,6 +380,7 @@ describe('BrechasPage', () => {
     const f = await abrir([{ method: 'POST', path: '/catastro/brechas/decisiones', body: { actualizadas: 1, creadas: 0, errores: [] } }])
     const dialogo = await abrirDecision('M1')
     expect(within(dialogo).getByText('Sin nota, cada ficha conserva la que tenía.')).toBeInTheDocument()
+    expect(within(dialogo).getByLabelText('Nota')).toHaveAttribute('maxlength', '2000')
     await userEvent.click(within(dialogo).getByRole('checkbox', { name: 'Borrar la nota que tenían' }))
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
     await within(dialogo).findByText('Actualizadas: 1 · Creadas: 0 · Con error: 0')
@@ -376,7 +392,7 @@ describe('BrechasPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'recuadro mediano' }))
     await userEvent.click(screen.getByRole('button', { name: 'Decidir…' }))
     const dialogo = await screen.findByRole('dialog')
-    expect(within(dialogo).getByText(/Se guardan una por una: 120 fichas pueden tardar un minuto o más/)).toBeInTheDocument()
+    expect(within(dialogo).getByText(/Se guardan de a 8: 120 fichas pueden tardar unos segundos/)).toBeInTheDocument()
     const simulado = globalThis.fetch
     let senal: AbortSignal | null | undefined
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -653,7 +669,7 @@ describe('BrechasPage', () => {
       { path: '/catastro/brechas/lotes', body: { type: 'FeatureCollection', features: [] } }
     ])
     renderWithProviders(<BrechasPage />)
-    expect(await screen.findByText('El corte elegido ya no está cargado.')).toBeInTheDocument()
+    expect(await screen.findByText('El corte elegido ya no está cargado o se está recargando.')).toBeInTheDocument()
     expect(screen.getByLabelText('Corte')).toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText('Corte'), CORTE_B)
     await userEvent.click(screen.getByRole('button', { name: 'Ver el más reciente' }))

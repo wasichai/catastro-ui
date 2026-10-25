@@ -74,7 +74,11 @@ export function Indicadores({ panel }: { panel: Panel }) {
         <Kpi etiqueta="Diferencia confiable" valor={soles(kpis.delta_impuesto_confiable, { signo: true })} detalle="Solo las fichas confiables" />
         <Kpi etiqueta="Omisos estimados" valor={cantidad(kpis.omisos_estimado)} />
         <Kpi etiqueta="Superan 5 UIT" valor={cantidad(kpis.supera_5_uit)} detalle="Diferencia de autoavalúo" />
-        <Kpi etiqueta="Pendientes de decidir" valor={cantidad(kpis.pendientes)} detalle={`de ${cantidad(kpis.fichas)}`} />
+        <Kpi
+          etiqueta="Pendientes de decidir"
+          valor={cantidad(kpis.pendientes)}
+          detalle={`de ${cantidad(kpis.fichas - kpis.sin_ficha)} con ficha · ${plural(kpis.sin_ficha, 'ficha', 'fichas')} sin código municipal`}
+        />
         <Kpi etiqueta="Con geometría" valor={cantidad(kpis.con_geometria)} detalle={`de ${cantidad(kpis.fichas)}`} />
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

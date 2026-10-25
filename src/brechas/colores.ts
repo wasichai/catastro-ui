@@ -1,7 +1,7 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 import { GRIS, type ClaseLeyenda } from '../comun/colores'
 import { soles } from '../comun/formato'
-import type { Categoria, Confianza, Estado, Filtros } from './tipos'
+import type { Categoria, Confianza, Estado } from './tipos'
 
 // the fixed categorical colours of the dashboard: the map, its legend, the chips and the bars all read them from here.
 // hex, like the aranceles palette, because maplibre does not read the oklch of wasichai's themes. OMISO (red) and
@@ -130,18 +130,4 @@ export function leyendaDe(modo: Colorear): ClaseLeyenda[] {
 export function minimoValido(texto: string): number | null {
   const n = Number(texto)
   return texto.trim() && Number.isFinite(n) && n >= 0 ? n : null
-}
-
-// the lotes come once per corte (and sector, which they do not carry): the other filters are applied on the map, the
-// same as the API applies them to the fichas. null = no filter
-export function filtroDeLotes(f: Filtros): ExpressionSpecification | null {
-  const condiciones: unknown[] = []
-  for (const campo of ['categoria', 'confianza', 'estado'] as const) if (f[campo].length) condiciones.push(['in', ['get', campo], ['literal', f[campo]]])
-  // as the API: a lote without supera_5_uit (a corte without UIT) counts as not over
-  if (f.supera_5_uit === 'true') condiciones.push(['==', ['get', 'supera_5_uit'], true])
-  if (f.supera_5_uit === 'false') condiciones.push(['!=', ['get', 'supera_5_uit'], true])
-  // as the API: a minimum leaves out the lotes without a difference
-  const minimo = minimoValido(f.min_delta)
-  if (minimo !== null) condiciones.push(['all', ['==', ['typeof', ['get', 'delta_impuesto']], 'number'], ['>=', ['abs', ['get', 'delta_impuesto']], minimo]])
-  return condiciones.length ? (['all', ...condiciones] as ExpressionSpecification) : null
 }

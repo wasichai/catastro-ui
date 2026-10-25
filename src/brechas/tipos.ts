@@ -37,6 +37,8 @@ export interface Panel {
     supera_5_uit: number
     pendientes: number
     con_geometria: number
+    // fichas without codigo_municipal: they cannot be decided, so pendientes and por_estado leave them out
+    sin_ficha: number
   }
   por_categoria: Cuenta<Categoria>[]
   // clave null: fichas without confianza (cortes before srtm#204)

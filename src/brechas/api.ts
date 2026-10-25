@@ -65,10 +65,12 @@ function conDeltaNumerico(d: LotesCollection): LotesCollection {
   }
 }
 
-// the lotes of a corte weigh megabytes: they come once per corte and sector (the lotes do not carry it), and the map
-// applies the other filters itself (filtroDeLotes). a decision invalidates them, since they carry the estado
-export function useLotes(corte: string | undefined, sector: string) {
-  const qs = parametros(corte, { ...FILTROS_VACIOS, sector }).toString()
+// the lotes of the fichas that match the filters. the server filters before it keeps one Feature per codigo_municipal,
+// so a lote shows when any of its fichas matches (filtering on the map would see only the one with the largest Δ).
+// each filter is a new request; a filter seen before comes from the cache. a decision invalidates them, since they
+// carry the estado
+export function useLotes(corte: string | undefined, filtros: Filtros) {
+  const qs = parametros(corte, filtros).toString()
   return useQuery({
     queryKey: ['brechas', 'lotes', corte, qs],
     queryFn: () => api<LotesCollection>(`${BASE}/lotes?${qs}`),
@@ -89,7 +91,7 @@ export function useCapasGis(enabled: boolean) {
   return useQuery({ queryKey: ['gis', 'layers'], queryFn: () => api<CapaGis[]>('/gis/layers'), enabled, retry: false })
 }
 
-// the API writes a decision per code, one after another: 500 codes take a while. the client waits up to 2 minutes
+// the API writes the decisions 8 at a time: 500 codes take a while. the client waits up to 2 minutes
 export const ESPERA_DECISION_MS = 120_000
 
 // a decision refreshes everything the dashboard shows of the corte: panel, fichas and lotes. the result shows at

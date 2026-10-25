@@ -12,8 +12,11 @@ export const DECISIONES = ['A_INSPECCIONAR', 'INSPECCIONADO', 'A_FISCALIZAR', 'D
 // the API takes up to 500 codes per decision
 export const MAXIMO = 500
 
-// the API writes the decisions one by one: from this many on, the dialog says it will take a while
+// the API writes the decisions 8 at a time: from this many on, the dialog says it will take a while
 export const LOTE_GRANDE = 100
+
+// the API refuses a nota or a motivo_descarte longer than this
+export const LARGO_MAXIMO = 2000
 
 export interface DialogoDecisionProps {
   abierto: boolean
@@ -129,7 +132,14 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
             </div>
             <div className="space-y-1">
               <Label htmlFor="decision-nota">Nota</Label>
-              <Textarea id="decision-nota" value={nota} onChange={(e) => setNota(e.target.value)} rows={2} aria-describedby="decision-nota-ayuda" />
+              <Textarea
+                id="decision-nota"
+                maxLength={LARGO_MAXIMO}
+                value={nota}
+                onChange={(e) => setNota(e.target.value)}
+                rows={2}
+                aria-describedby="decision-nota-ayuda"
+              />
               <p id="decision-nota-ayuda" className="text-xs text-ink-muted">
                 Sin nota, cada ficha conserva la que tenía.
               </p>
@@ -145,6 +155,7 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
                 <Label htmlFor="decision-motivo">Motivo del descarte (obligatorio)</Label>
                 <Textarea
                   id="decision-motivo"
+                  maxLength={LARGO_MAXIMO}
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   rows={2}
@@ -162,7 +173,7 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
             )}
             {demasiadas && <Alert tone="warning">{`Elige hasta ${cantidad(MAXIMO)} fichas por decisión; hay ${cantidad(codigos.length)}.`}</Alert>}
             {!demasiadas && codigos.length >= LOTE_GRANDE && (
-              <Alert tone="notice">{`Se guardan una por una: ${plural(codigos.length, 'ficha', 'fichas')} pueden tardar un minuto o más. No cierres la página mientras tanto.`}</Alert>
+              <Alert tone="notice">{`Se guardan de a 8: ${plural(codigos.length, 'ficha', 'fichas')} pueden tardar unos segundos. No cierres la página mientras tanto.`}</Alert>
             )}
             {decidir.isError && <Alert tone="danger">{mensajeDeError(decidir.error)}</Alert>}
             <div className="flex justify-end gap-2">

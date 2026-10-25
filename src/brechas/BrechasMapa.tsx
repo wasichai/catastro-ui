@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Popup } from 'maplibre-gl'
-import type { ExpressionSpecification, Map, RasterTileSource } from 'maplibre-gl'
+import type { Map, RasterTileSource } from 'maplibre-gl'
 import { WMS_TILE_SIZE, wmsTileUrl } from '@wasichai/gis'
 import { agregarCapasVias, capasDeVias, pintarVias, verVias } from '../aranceles/capasVias'
 import type { TramosCollection } from '../aranceles/tipos'
@@ -24,8 +24,6 @@ export interface BrechasMapaProps {
   // a new corte frames the map again
   corte: string | undefined
   lotes: LotesCollection | undefined
-  // the filters of the table that the map applies itself (filtroDeLotes); null = every lote
-  filtro: ExpressionSpecification | null
   colorear: Colorear
   // the codigo_municipal of the selected lotes, shared with the table
   seleccion: string[]
@@ -62,7 +60,7 @@ function sincronizarWms(m: Map, capas: CapaWms[]) {
 
 // the lotes of the brecha coloured by the chosen key, the vías with their arancel and GeoServer's WMS layers. each
 // prop has its own effect, so a selection or an opacity does not send the lotes to the worker again: the GeoJSON goes
-// only when it changes, the colours and filters by paint and filter, and the selection by feature-state
+// only when it changes, the colours by paint, and the selection by feature-state
 export default function BrechasMapa(props: BrechasMapaProps) {
   const contenedor = useRef<HTMLDivElement>(null)
   const mapa = useRef<Map | null>(null)
@@ -97,9 +95,6 @@ export default function BrechasMapa(props: BrechasMapaProps) {
     }
   })
 
-  const aplicarFiltro = conMapa((m, p) => {
-    for (const capa of [RELLENO, BORDE, SELECCION]) m.setFilter(capa, p.filtro)
-  })
   const aplicarColor = conMapa((m, p) => m.setPaintProperty(RELLENO, 'fill-color', colorDeLote(p.colorear)))
   const aplicarVias = conMapa((m, p) => {
     ;(m.getSource(VIAS) as { setData(d: unknown): void } | undefined)?.setData(p.mostrarVias && p.vias ? p.vias : VACIO)
@@ -134,7 +129,7 @@ export default function BrechasMapa(props: BrechasMapaProps) {
       m.on('mouseenter', RELLENO, () => (m.getCanvas().style.cursor = 'pointer'))
       m.on('mouseleave', RELLENO, () => (m.getCanvas().style.cursor = ''))
       listo.current = true
-      for (const aplicar of [aplicarColor, aplicarFiltro, aplicarLotes, aplicarSeleccion, aplicarVias, aplicarCortesVias, aplicarWms]) aplicar()
+      for (const aplicar of [aplicarColor, aplicarLotes, aplicarSeleccion, aplicarVias, aplicarCortesVias, aplicarWms]) aplicar()
     })
 
     // the selection box: Shift + drag draws it, and on release every lote under it joins the selection
@@ -212,7 +207,6 @@ export default function BrechasMapa(props: BrechasMapaProps) {
     encuadrado.current = false
   }, [props.corte])
   useEffect(aplicarLotes, [props.lotes])
-  useEffect(aplicarFiltro, [props.filtro])
   useEffect(aplicarColor, [props.colorear])
   useEffect(aplicarSeleccion, [props.seleccion])
   useEffect(aplicarVias, [props.vias, props.mostrarVias])

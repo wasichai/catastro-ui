@@ -8,7 +8,7 @@ import { fecha, plural } from '../comun/formato'
 import { CONTROL, ErrorCarga } from '../comun/ui'
 import { FILTROS_VACIOS, descargarCsv, sinCortes, useCortes, useFichas, useLotes, usePanel } from './api'
 import { CapasMapa, Leyenda } from './CapasMapa'
-import { filtroDeLotes, leyendaDe, type Colorear } from './colores'
+import { leyendaDe, type Colorear } from './colores'
 import { DialogoDecision } from './DialogoDecision'
 import { Indicadores } from './Indicadores'
 import { FiltrosFichas, TablaFichas } from './TablaFichas'
@@ -74,12 +74,11 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
 
   const panel = usePanel(corte)
   const fichas = useFichas(corte, filtros, orden, page, size)
-  const lotes = useLotes(corte, filtros.sector)
+  const lotes = useLotes(corte, filtros)
   // the year of the corte chosen: the list of cortes already has it, so it never lags behind the panel
   const anio = cortes.data?.find((c) => c.clave === corte)?.anio ?? panel.data?.corte.anio
   const vias = useArancelesVia(anio, mostrarVias)
 
-  const filtro = useMemo(() => filtroDeLotes(filtros), [filtros])
   const clases = useMemo(() => leyendaDe(colorear), [colorear])
   const valoresVias = useMemo(() => valoresDe(vias.data?.features ?? []), [vias.data])
   const cortesVias = useMemo(() => calcularCortes(valoresVias), [valoresVias])
@@ -182,7 +181,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
         sinCortes(panel.error) ? (
           <Alert tone="warning">
             <span className="flex flex-wrap items-center gap-2">
-              El corte elegido ya no está cargado.
+              El corte elegido ya no está cargado o se está recargando.
               <Button
                 size="sm"
                 variant="secondary"
@@ -212,7 +211,6 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
             <BrechasMapa
               corte={corte}
               lotes={lotes.data}
-              filtro={filtro}
               colorear={colorear}
               seleccion={lista}
               onSeleccionar={elegir}
@@ -254,6 +252,11 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
             Exportar CSV
           </Button>
         </div>
+        {filtros.estado.includes('PENDIENTE') && !!panel.data?.kpis.sin_ficha && (
+          <p className="text-sm text-ink-muted">
+            {`Incluye ${plural(panel.data.kpis.sin_ficha, 'ficha', 'fichas')} sin código municipal, que no se pueden decidir.`}
+          </p>
+        )}
         {errorCsv && <Alert tone="danger">{errorCsv}</Alert>}
         {fichas.isError ? (
           <ErrorCarga onReintentar={() => void fichas.refetch()}>{mensajeDeError(fichas.error)}</ErrorCarga>

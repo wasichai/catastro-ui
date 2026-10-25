@@ -186,9 +186,10 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => {
+                // the list first: until it comes back, its first corte may be the one that is gone
+                onClick={async () => {
+                  await cortes.refetch()
                   setCorteElegido(undefined)
-                  void cortes.refetch()
                 }}
               >
                 Ver el más reciente

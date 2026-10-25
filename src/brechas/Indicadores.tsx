@@ -1,7 +1,7 @@
 import { Card, CardBody } from '@wasichai/ui'
 import { GRIS } from '../comun/colores'
 import { cantidad, plural, soles } from '../comun/formato'
-import { COLOR_CATEGORIA, COLOR_CONFIANZA, COLOR_ESTADO, ETIQUETA_CATEGORIA, ETIQUETA_CONFIANZA, ETIQUETA_ESTADO, colorDeSigno } from './colores'
+import { COLOR_CATEGORIA, COLOR_ESTADO, ETIQUETA_CATEGORIA, ETIQUETA_ESTADO, colorConfianza, colorDeSigno, etiquetaConfianza } from './colores'
 import type { Panel } from './tipos'
 
 function Kpi({ etiqueta, valor, detalle }: { etiqueta: string; valor: string; detalle?: string }) {
@@ -91,11 +91,11 @@ export function Indicadores({ panel }: { panel: Panel }) {
         <Barras
           titulo="Por confianza"
           barras={panel.por_confianza.map((c) => ({
-            clave: c.clave,
-            etiqueta: ETIQUETA_CONFIANZA[c.clave] ?? c.clave,
+            clave: c.clave ?? 'SIN_CONFIANZA',
+            etiqueta: etiquetaConfianza(c.clave),
             valor: c.fichas,
             texto: fichasYDelta(c.fichas, c.delta_impuesto),
-            color: COLOR_CONFIANZA[c.clave] ?? GRIS
+            color: colorConfianza(c.clave)
           }))}
         />
         <Barras

@@ -12,6 +12,9 @@ export const DECISIONES = ['A_INSPECCIONAR', 'INSPECCIONADO', 'A_FISCALIZAR', 'D
 // the API takes up to 500 codes per decision
 export const MAXIMO = 500
 
+// the API writes the decisions one by one: from this many on, the dialog says it will take a while
+export const LOTE_GRANDE = 100
+
 export interface DialogoDecisionProps {
   abierto: boolean
   onAbierto: (abierto: boolean) => void
@@ -27,6 +30,8 @@ const CAMPOS: Record<string, string> = { codigos: 'Fichas', anio: 'Año', estado
 function mensajeDeError(error: Error): string {
   if (error instanceof ApiError && error.status === 403) return 'No tienes permiso para decidir sobre las brechas.'
   if (error instanceof ApiError && error.violations.length) return error.violations.map((v) => `${CAMPOS[v.field] ?? v.field}: ${v.message}`).join('. ')
+  if (error.name === 'TimeoutError' || error.name === 'AbortError')
+    return 'La decisión tardó demasiado y se dejó de esperar. Puede que una parte se haya guardado: revisa la tabla antes de repetirla.'
   return 'No se pudo guardar la decisión.'
 }
 
@@ -34,6 +39,7 @@ function mensajeDeError(error: Error): string {
 export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido }: DialogoDecisionProps) {
   const [estado, setEstado] = useState<Decision['estado']>('A_INSPECCIONAR')
   const [nota, setNota] = useState('')
+  const [borrarNota, setBorrarNota] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [faltaMotivo, setFaltaMotivo] = useState(false)
   const [resultado, setResultado] = useState<ResultadoDecision | null>(null)
@@ -44,6 +50,7 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
     if (!a) {
       setEstado('A_INSPECCIONAR')
       setNota('')
+      setBorrarNota(false)
       setMotivo('')
       setResultado(null)
       setFaltaMotivo(false)
@@ -60,7 +67,9 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
     }
     setFaltaMotivo(false)
     const cuerpo: Decision = { codigos, anio, estado }
+    // an empty note keeps the one each ficha had; null clears it
     if (nota.trim()) cuerpo.nota = nota.trim()
+    else if (borrarNota) cuerpo.nota = null
     if (estado === 'DESCARTADO') cuerpo.motivo_descarte = motivo.trim()
     try {
       setResultado(await decidir.mutateAsync(cuerpo))
@@ -86,6 +95,9 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
             <p className="text-sm text-ink">
               {`Actualizadas: ${cantidad(resultado.actualizadas)} · Creadas: ${cantidad(resultado.creadas)} · Con error: ${cantidad(resultado.errores.length)}`}
             </p>
+            {resultado.errores.length > 0 && (
+              <p className="text-sm text-ink-muted">Las fichas con error no cambiaron, por ejemplo un código que ya no está en el padrón de catastro.</p>
+            )}
             {resultado.errores.length > 0 && (
               <ul aria-label="Errores" className="max-h-40 list-disc overflow-y-auto pl-5 text-sm text-danger">
                 {resultado.errores.map((e) => (
@@ -117,7 +129,16 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
             </div>
             <div className="space-y-1">
               <Label htmlFor="decision-nota">Nota</Label>
-              <Textarea id="decision-nota" value={nota} onChange={(e) => setNota(e.target.value)} rows={2} />
+              <Textarea id="decision-nota" value={nota} onChange={(e) => setNota(e.target.value)} rows={2} aria-describedby="decision-nota-ayuda" />
+              <p id="decision-nota-ayuda" className="text-xs text-ink-muted">
+                Sin nota, cada ficha conserva la que tenía.
+              </p>
+              {!nota.trim() && (
+                <label className="flex items-center gap-2 text-sm text-ink">
+                  <input type="checkbox" checked={borrarNota} onChange={(e) => setBorrarNota(e.target.checked)} />
+                  Borrar la nota que tenían
+                </label>
+              )}
             </div>
             {estado === 'DESCARTADO' && (
               <div className="space-y-1">
@@ -140,6 +161,9 @@ export function DialogoDecision({ abierto, onAbierto, codigos, anio, onDecidido 
               </div>
             )}
             {demasiadas && <Alert tone="warning">{`Elige hasta ${cantidad(MAXIMO)} fichas por decisión; hay ${cantidad(codigos.length)}.`}</Alert>}
+            {!demasiadas && codigos.length >= LOTE_GRANDE && (
+              <Alert tone="notice">{`Se guardan una por una: ${plural(codigos.length, 'ficha', 'fichas')} pueden tardar un minuto o más. No cierres la página mientras tanto.`}</Alert>
+            )}
             {decidir.isError && <Alert tone="danger">{mensajeDeError(decidir.error)}</Alert>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => cambiarAbierto(false)}>

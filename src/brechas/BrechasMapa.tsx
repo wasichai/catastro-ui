@@ -115,7 +115,7 @@ export default function BrechasMapa(props: BrechasMapaProps) {
     m.on('load', () => {
       m.addSource(LOTES, { type: 'geojson', data: VACIO, promoteId: 'codigo_municipal' })
       m.addLayer({ id: RELLENO, type: 'fill', source: LOTES, paint: { 'fill-color': GRIS, 'fill-opacity': 0.6 } })
-      m.addLayer({ id: BORDE, type: 'line', source: LOTES, paint: { 'line-color': '#ffffff', 'line-width': 0.5 } })
+      m.addLayer({ id: BORDE, type: 'line', source: LOTES, paint: { 'line-color': '#374151', 'line-width': 0.5, 'line-opacity': 0.5 } })
       agregarCapasVias(m, VIAS)
       m.addLayer({
         id: SELECCION,

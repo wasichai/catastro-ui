@@ -1,5 +1,6 @@
 import { ApiError, api, type ApiClient } from '@wasichai/core'
 import { useMutation, useQuery, useQueryClient, type Query } from '@tanstack/react-query'
+import { minimoValido } from './colores'
 import type { CapaGis, Corte, Decision, Ficha, Filtros, LotesCollection, Orden, Pagina, Panel, ResultadoDecision, ServiciosGeoServer } from './tipos'
 
 const BASE = '/catastro/brechas'
@@ -14,7 +15,7 @@ export function parametros(corte: string | undefined, filtros: Filtros, extra: R
   for (const campo of ['categoria', 'confianza', 'estado'] as const) if (filtros[campo].length) p.set(campo, filtros[campo].join(','))
   if (filtros.sector.trim()) p.set('sector', filtros.sector.trim())
   if (filtros.supera_5_uit) p.set('supera_5_uit', filtros.supera_5_uit)
-  if (filtros.min_delta.trim() && Number.isFinite(Number(filtros.min_delta))) p.set('min_delta', filtros.min_delta.trim())
+  if (minimoValido(filtros.min_delta) !== null) p.set('min_delta', filtros.min_delta.trim())
   for (const [k, v] of Object.entries(extra)) p.set(k, String(v))
   return p
 }
@@ -88,12 +89,16 @@ export function useCapasGis(enabled: boolean) {
   return useQuery({ queryKey: ['gis', 'layers'], queryFn: () => api<CapaGis[]>('/gis/layers'), enabled, retry: false })
 }
 
+// the API writes a decision per code, one after another: 500 codes take a while. the client waits up to 2 minutes
+export const ESPERA_DECISION_MS = 120_000
+
 // a decision refreshes everything the dashboard shows of the corte: panel, fichas and lotes. the result shows at
 // once; the refetch does not hold it
 export function useDecidir() {
   const cliente = useQueryClient()
   return useMutation({
-    mutationFn: (d: Decision) => api<ResultadoDecision>(`${BASE}/decisiones`, { method: 'POST', body: JSON.stringify(d) }),
+    mutationFn: (d: Decision) =>
+      api<ResultadoDecision>(`${BASE}/decisiones`, { method: 'POST', body: JSON.stringify(d), signal: AbortSignal.timeout(ESPERA_DECISION_MS) }),
     onSuccess: () => {
       void cliente.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'brechas' && ['panel', 'fichas', 'lotes'].includes(q.queryKey[1] as string) })
     }

@@ -47,11 +47,10 @@ export function ArancelesViaPage({ workerUrl }: { workerUrl?: string }) {
             </option>
           ))}
         </select>
-        {consulta.isFetching && (
-          <span role="status" className="text-sm text-ink-muted">
-            Cargando…
-          </span>
-        )}
+        {/* always there, so screen readers announce the text when it changes */}
+        <span role="status" className="text-sm text-ink-muted">
+          {consulta.isFetching ? 'Cargando…' : ''}
+        </span>
       </div>
       {consulta.isError ? (
         <ErrorCarga>{mensajeDeError(consulta.error)}</ErrorCarga>

@@ -66,9 +66,16 @@ describe('filtroDeLotes', () => {
     expect(filtroDeLotes({ ...FILTROS_VACIOS, categoria: ['OMISO'], supera_5_uit: 'false', min_delta: '100' })).toEqual([
       'all',
       ['in', ['get', 'categoria'], ['literal', ['OMISO']]],
-      ['==', ['get', 'supera_5_uit'], false],
-      ['>=', ['abs', ['to-number', ['get', 'delta_impuesto'], 0]], 100]
+      // a lote without supera_5_uit counts as not over, as in the API
+      ['!=', ['get', 'supera_5_uit'], true],
+      // and a minimum leaves out the lotes without a difference
+      ['all', ['==', ['typeof', ['get', 'delta_impuesto']], 'number'], ['>=', ['abs', ['get', 'delta_impuesto']], 100]]
     ])
+    expect(filtroDeLotes({ ...FILTROS_VACIOS, supera_5_uit: 'true' })).toEqual(['all', ['==', ['get', 'supera_5_uit'], true]])
+    // a negative minimum is not a filter, here nor in the query
+    expect(filtroDeLotes({ ...FILTROS_VACIOS, min_delta: '-5' })).toBeNull()
+    expect(parametros(undefined, { ...FILTROS_VACIOS, min_delta: '-5' }).has('min_delta')).toBe(false)
+    expect(parametros(undefined, { ...FILTROS_VACIOS, min_delta: '0' }).get('min_delta')).toBe('0')
   })
 })
 
@@ -108,5 +115,12 @@ describe('popupHtml', () => {
     const html = popupHtml({ codigo_municipal: 'M1' } as LoteProps)
     expect(html).not.toContain('undefined')
     expect(html).toContain('Pendiente')
+    expect(html).toContain('Sin confianza')
+    expect(html).not.toContain('Aviso')
+  })
+
+  it('says when the code has more than one ficha', () => {
+    expect(popupHtml({ ...props, fichas: 2 })).toContain('Este código tiene 2 fichas; el mapa muestra la de mayor diferencia')
+    expect(popupHtml({ ...props, fichas: 1 })).not.toContain('Aviso')
   })
 })

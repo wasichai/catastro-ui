@@ -30,6 +30,16 @@ vi.mock('./BrechasMapa', () => ({
       >
         recuadro grande
       </button>
+      <button
+        onClick={() =>
+          p.onSeleccionar(
+            Array.from({ length: 120 }, (_, i) => `G${i}`),
+            true
+          )
+        }
+      >
+        recuadro mediano
+      </button>
     </div>
   )
 }))
@@ -49,7 +59,11 @@ const panel = (anio = 2026, clave = CORTE_A): Panel => ({
     { clave: 'OMISO', fichas: 10, delta_impuesto: 500 },
     { clave: 'COINCIDE', fichas: 5, delta_impuesto: 0 }
   ],
-  por_confianza: [{ clave: 'CONFIABLE', fichas: 20, delta_impuesto: 600 }],
+  por_confianza: [
+    { clave: 'CONFIABLE', fichas: 20, delta_impuesto: 600 },
+    // a corte before srtm#204
+    { clave: null, fichas: 2, delta_impuesto: 10 }
+  ],
   por_estado: [
     { clave: 'PENDIENTE', fichas: 25 },
     { clave: 'DESCARTADO', fichas: 5 }
@@ -93,7 +107,8 @@ const ficha = (i: number, codigo: string | null, extra: Partial<Ficha> = {}): Fi
 const fichas = [
   ficha(1, 'M1'),
   ficha(2, 'M2', { estado: 'A_INSPECCIONAR', responsable: 'analista@prueba.test', decidido_en: '2026-10-20T09:00:00', estimado: true, con_geometria: false }),
-  ficha(3, null, { categoria: 'SIN_CATASTRO' })
+  ficha(3, null, { categoria: 'SIN_CATASTRO' }),
+  ficha(4, null, { categoria: 'SIN_CATASTRO', codigo_catastro: null, codigo_predio: 'P-9', supera_5_uit: null, confianza: null })
 ]
 // three pages, so the tests can leave the first one
 const pagina = { content: fichas, page: 0, size: 50, totalElements: 120, totalPages: 3 }
@@ -187,6 +202,17 @@ describe('BrechasPage', () => {
     expect(parametrosDe(llamadas(fetch!, '/catastro/brechas/panel')[0]!.url).get('corte')).toBe(CORTE_A)
   })
 
+  it('shows the fichas the old cortes or a missing UIT leave half empty', async () => {
+    await abrir()
+    expect(within(screen.getByRole('list', { name: 'Por confianza' })).getByText('Sin confianza')).toBeInTheDocument()
+    const fila = screen.getByRole('cell', { name: 'Predio P-9' }).closest('tr')!
+    // the Supera 5 UIT column of a corte without UIT
+    const columna = screen.getAllByRole('columnheader').findIndex((c) => c.textContent === 'Supera 5 UIT')
+    expect(within(fila).getAllByRole('cell')[columna]).toHaveTextContent(/^—$/)
+    expect(within(fila).getByText('Sin confianza')).toBeInTheDocument()
+    expect(within(fila).queryByText('No')).not.toBeInTheDocument()
+  })
+
   it('shows who decided, when, and what the map cannot draw', async () => {
     await abrir()
     expect(screen.getByText('por analista@prueba.test el 20/10/2026')).toBeInTheDocument()
@@ -221,7 +247,7 @@ describe('BrechasPage', () => {
     expect(lotes.get('sector')).toBe('02')
     const filtro = JSON.parse(screen.getByTestId('mapa-filtro').textContent!)
     expect(filtro).toContainEqual(['in', ['get', 'categoria'], ['literal', ['OMISO', 'SUBVALUADO']]])
-    expect(filtro).toContainEqual(['>=', ['abs', ['to-number', ['get', 'delta_impuesto'], 0]], 100])
+    expect(filtro).toContainEqual(['all', ['==', ['typeof', ['get', 'delta_impuesto']], 'number'], ['>=', ['abs', ['get', 'delta_impuesto']], 100]])
     // the order, the page and the size
     await irAPagina2(f)
     await userEvent.selectOptions(screen.getByLabelText('Orden'), 'delta_asc')
@@ -333,6 +359,34 @@ describe('BrechasPage', () => {
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
     expect(await within(dialogo).findByText('Actualizadas: 0 · Creadas: 1 · Con error: 0')).toBeInTheDocument()
     expect(f.calls.find((c) => c.method === 'POST')!.body).toEqual({ codigos: ['M1'], anio: 2026, estado: 'A_INSPECCIONAR' })
+  })
+
+  it('keeps the notes unless asked to clear them, with an explicit null', async () => {
+    const f = await abrir([{ method: 'POST', path: '/catastro/brechas/decisiones', body: { actualizadas: 1, creadas: 0, errores: [] } }])
+    const dialogo = await abrirDecision('M1')
+    expect(within(dialogo).getByText('Sin nota, cada ficha conserva la que tenía.')).toBeInTheDocument()
+    await userEvent.click(within(dialogo).getByRole('checkbox', { name: 'Borrar la nota que tenían' }))
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
+    await within(dialogo).findByText('Actualizadas: 1 · Creadas: 0 · Con error: 0')
+    expect(f.calls.find((c) => c.method === 'POST')!.body).toEqual({ codigos: ['M1'], anio: 2026, estado: 'A_INSPECCIONAR', nota: null })
+  })
+
+  it('warns that a big batch takes a while, and stops waiting with a clear message', async () => {
+    await abrir()
+    await userEvent.click(screen.getByRole('button', { name: 'recuadro mediano' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Decidir…' }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText(/Se guardan una por una: 120 fichas pueden tardar un minuto o más/)).toBeInTheDocument()
+    const simulado = globalThis.fetch
+    let senal: AbortSignal | null | undefined
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (init?.method !== 'POST') return simulado(url, init)
+      senal = init.signal
+      throw new DOMException('se acabó la espera', 'TimeoutError')
+    }) as typeof globalThis.fetch
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar decisión' }))
+    expect(await within(dialogo).findByText(/La decisión tardó demasiado/)).toBeInTheDocument()
+    expect(senal).toBeInstanceOf(AbortSignal)
   })
 
   it('starts each opening of the dialog clean', async () => {

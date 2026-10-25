@@ -21,7 +21,7 @@ export interface Corte {
   cargado_en: string | null
 }
 
-export interface Cuenta<K extends string = string> {
+export interface Cuenta<K extends string | null = string> {
   clave: K
   fichas: number
   delta_impuesto?: Decimal
@@ -39,18 +39,19 @@ export interface Panel {
     con_geometria: number
   }
   por_categoria: Cuenta<Categoria>[]
-  por_confianza: Cuenta<Confianza>[]
+  // clave null: fichas without confianza (cortes before srtm#204)
+  por_confianza: Cuenta<Confianza | null>[]
   por_estado: Cuenta<Estado>[]
   top_sectores: { sector: string | null; fichas: number; delta_impuesto: Decimal }[]
 }
 
 export interface Ficha {
   id: string
-  codigo_catastro: string
+  codigo_catastro: string | null
   codigo_municipal: string | null
   codigo_predio: string | null
   categoria: Categoria
-  confianza: Confianza
+  confianza: Confianza | null
   confianza_motivo: string | null
   sector: string | null
   manzana: string | null
@@ -63,9 +64,10 @@ export interface Ficha {
   impuesto_catastro: Decimal
   delta_impuesto: Decimal
   delta_arbitrios: Decimal
-  estimado: boolean
+  estimado: boolean | null
   motivo: string | null
-  supera_5_uit: boolean
+  // null: the corte had no UIT
+  supera_5_uit: boolean | null
   estado: Estado
   responsable: string | null
   nota: string | null
@@ -84,12 +86,14 @@ export interface Pagina<T> {
 // maplibre's tile encoding drops nulls: they arrive as undefined
 export interface LoteProps {
   codigo_municipal: string
-  codigo_catastro: string
+  codigo_catastro: string | null
   categoria: Categoria
-  confianza: Confianza
+  confianza: Confianza | null
   delta_impuesto: number | null
   estado: Estado
-  supera_5_uit: boolean
+  supera_5_uit: boolean | null
+  // how many fichas share the codigo_municipal, when the API says it: the map draws one, the one with the largest Δ
+  fichas?: number
 }
 
 export interface LoteFeature {
@@ -120,7 +124,8 @@ export interface Decision {
   codigos: string[]
   anio: number
   estado: Exclude<Estado, 'PENDIENTE'>
-  nota?: string
+  // left out keeps the note there was; null clears it
+  nota?: string | null
   motivo_descarte?: string
 }
 

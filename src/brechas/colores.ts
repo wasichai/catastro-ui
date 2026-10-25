@@ -38,6 +38,10 @@ export const ETIQUETA_CATEGORIA: Record<Categoria, string> = {
 
 export const ETIQUETA_CONFIANZA: Record<Confianza, string> = { CONFIABLE: 'Confiable', DUDOSO: 'Dudoso', SIN_LEVANTAR: 'Sin levantar' }
 
+// cortes before srtm#204 have fichas without confianza
+export const etiquetaConfianza = (c: Confianza | null | undefined) => (c ? (ETIQUETA_CONFIANZA[c] ?? c) : 'Sin confianza')
+export const colorConfianza = (c: Confianza | null | undefined) => (c ? (COLOR_CONFIANZA[c] ?? GRIS) : GRIS)
+
 export const ETIQUETA_ESTADO: Record<Estado, string> = {
   PENDIENTE: 'Pendiente',
   A_INSPECCIONAR: 'A inspeccionar',
@@ -55,7 +59,8 @@ export const COLOR_SELECCION = '#d100d1'
 export const DIVERGENTE = {
   // strongest to weakest
   baja: ['#2166ac', '#67a9cf', '#d1e5f0'],
-  neutro: '#f7f7f7',
+  // a light grey, not white: the lotes «sin cambio» (most of them) stay visible on the basemap
+  neutro: '#e0e0e0',
   // weakest to strongest
   sube: ['#fddbc7', '#ef8a62', '#b2182b']
 } as const
@@ -121,13 +126,22 @@ export function leyendaDe(modo: Colorear): ClaseLeyenda[] {
   return Object.entries(colores).map(([clave, color]) => ({ color, etiqueta: (etiquetas as Record<string, string>)[clave]! }))
 }
 
+// the minimum difference the user typed, when it is a number of 0 or more; the API refuses a negative one
+export function minimoValido(texto: string): number | null {
+  const n = Number(texto)
+  return texto.trim() && Number.isFinite(n) && n >= 0 ? n : null
+}
+
 // the lotes come once per corte (and sector, which they do not carry): the other filters are applied on the map, the
 // same as the API applies them to the fichas. null = no filter
 export function filtroDeLotes(f: Filtros): ExpressionSpecification | null {
   const condiciones: unknown[] = []
   for (const campo of ['categoria', 'confianza', 'estado'] as const) if (f[campo].length) condiciones.push(['in', ['get', campo], ['literal', f[campo]]])
-  if (f.supera_5_uit) condiciones.push(['==', ['get', 'supera_5_uit'], f.supera_5_uit === 'true'])
-  const minimo = Number(f.min_delta)
-  if (f.min_delta.trim() && Number.isFinite(minimo)) condiciones.push(['>=', ['abs', ['to-number', ['get', 'delta_impuesto'], 0]], minimo])
+  // as the API: a lote without supera_5_uit (a corte without UIT) counts as not over
+  if (f.supera_5_uit === 'true') condiciones.push(['==', ['get', 'supera_5_uit'], true])
+  if (f.supera_5_uit === 'false') condiciones.push(['!=', ['get', 'supera_5_uit'], true])
+  // as the API: a minimum leaves out the lotes without a difference
+  const minimo = minimoValido(f.min_delta)
+  if (minimo !== null) condiciones.push(['all', ['==', ['typeof', ['get', 'delta_impuesto']], 'number'], ['>=', ['abs', ['get', 'delta_impuesto']], minimo]])
   return condiciones.length ? (['all', ...condiciones] as ExpressionSpecification) : null
 }

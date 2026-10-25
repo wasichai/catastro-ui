@@ -189,7 +189,7 @@ describe('BrechasPage', () => {
     await abrir()
     expect(within(screen.getByRole('group', { name: 'Diferencia de impuesto' })).getByText('+S/ 850.50')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Diferencia confiable' })).getByText('+S/ 600.00')).toBeInTheDocument()
-    expect(within(screen.getByRole('group', { name: 'Omisos estimados' })).getByText('3')).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Omisos estimados' })).getByText('+S/ 3.00')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Superan 5 UIT' })).getByText('2')).toBeInTheDocument()
     const pendientes = within(screen.getByRole('group', { name: 'Pendientes de decidir' }))
     expect(pendientes.getByText('25')).toBeInTheDocument()
@@ -587,6 +587,14 @@ describe('BrechasPage', () => {
     const p = parametrosDe(urlWms(capa, 'http://gs.test/geoserver/catastro/wms')!)
     expect(Object.fromEntries(p)).toEqual({ service: 'WMS', version: '1.1.1', request: 'GetMap', styles: '', layers: 'catastro:tramo_via' })
     expect(urlWms(capa, '')).toBeNull()
+  })
+
+  it('asks a /geoserver/ url to this same origin, through its proxy', async () => {
+    const { urlWms, delMismoOrigen } = await import('./CapasMapa')
+    const capa = { objectName: 'v', geometryName: 'g', label: 'Vías', layerName: 'catastro:tramo_via', published: true, wms: '' }
+    expect(urlWms(capa, 'http://srtm-ica-geoserver:8080/geoserver/catastro/wms')).toMatch(/^\/geoserver\/catastro\/wms\?service=WMS/)
+    expect(delMismoOrigen('https://mapas.muni.gob.pe/wms?layers=x')).toBe('https://mapas.muni.gob.pe/wms?layers=x')
+    expect(delMismoOrigen('no es url')).toBe('no es url')
   })
 
   it('says GeoServer is off and does not ask for its layers', async () => {

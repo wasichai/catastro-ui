@@ -7,10 +7,21 @@ import type { CapaGis, CapaWms } from './tipos'
 // the WMS url of a published layer: its own, or a GetMap on the service with the layer name (wmsTileUrl adds only
 // bbox, size, srs, format and transparency). null when there is neither: the layer is not offered
 export function urlWms(capa: CapaGis, servicioWms: string | undefined): string | null {
-  if (capa.wms) return capa.wms
+  if (capa.wms) return delMismoOrigen(capa.wms)
   if (!servicioWms) return null
   const p = new URLSearchParams({ service: 'WMS', version: '1.1.1', request: 'GetMap', styles: '', layers: capa.layerName })
-  return `${servicioWms}${servicioWms.includes('?') ? '&' : '?'}${p}`
+  return delMismoOrigen(`${servicioWms}${servicioWms.includes('?') ? '&' : '?'}${p}`)
+}
+
+// the urls Core gives are GeoServer's address as Core reaches it (inside the deployment's network), which the browser
+// may not reach: a /geoserver/ url is asked to this same origin, whose web server proxies /geoserver/ to GeoServer
+export function delMismoOrigen(url: string): string {
+  try {
+    const u = new URL(url)
+    return u.pathname.startsWith('/geoserver/') ? `${u.pathname}${u.search}` : url
+  } catch {
+    return url
+  }
 }
 
 export interface CapasMapaProps {

@@ -8,8 +8,8 @@ import type { TramoProps, TramosCollection } from './tipos'
 const FUENTE = 'aranceles-via'
 const CAPAS = ['con-valor', 'sin-arancel-anio', 'sin-asignar'].map((id) => `${FUENTE}-${id}`)
 
-// the same raster basemap as @wasichai/gis, so no key is needed
-const ESTILO = {
+// the same raster basemap as @wasichai/gis, so no key is needed; brechas draws over it too
+export const ESTILO = {
   version: 8 as const,
   sources: {
     osm: {
@@ -29,7 +29,8 @@ interface Props {
   workerUrl?: string
 }
 
-function limites(datos: TramosCollection): LngLatBoundsLike | null {
+// the box around every coordinate of the features; brechas frames its lotes with it too
+export function limites(datos: { features: { geometry: { coordinates: unknown } }[] }): LngLatBoundsLike | null {
   let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity]
   const recorrer = (c: unknown) => {
     if (!Array.isArray(c)) return

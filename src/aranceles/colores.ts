@@ -51,11 +51,12 @@ export function clasesDeLeyenda(cortesDados: number[], hayValores = true): Clase
   }))
 }
 
-// the colour of a line with an arancel: a step on valor_m2 over the cuts
-export function colorPorValor(cortesDados: number[]): ExpressionSpecification {
+// the colour of a line with an arancel: a step on valor_m2 over the cuts. brechas paints its lotes with the same step
+// on another property (delta_impuesto)
+export function colorPorValor(cortesDados: number[], campo = 'valor_m2'): ExpressionSpecification {
   if (!cortesDados.length) return PALETA[PALETA.length - 1]! as unknown as ExpressionSpecification
   const pasos = cortesDados.flatMap((corte, i) => [corte, PALETA[i + 1]!])
-  return ['step', ['get', 'valor_m2'], PALETA[0], ...pasos] as unknown as ExpressionSpecification
+  return ['step', ['get', campo], PALETA[0], ...pasos] as unknown as ExpressionSpecification
 }
 
 // the frentes are drawn beside the eje: izquierdo to the left of the line's direction, derecho to the right

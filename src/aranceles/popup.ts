@@ -9,7 +9,7 @@ const ASIGNACION: Record<Asignacion, string> = {
 
 const LADO = { AMBOS: 'Ambos lados', IZQUIERDO: 'Izquierdo', DERECHO: 'Derecho' } as const
 
-const escapar = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+export const escapar = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
 export function nombreDeVia(p: Pick<TramoProps, 'tip_via' | 'nom_via'>): string {
   return [p.tip_via, p.nom_via].filter(Boolean).join(' ')

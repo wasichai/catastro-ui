@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { ApiError, PageHeader } from '@wasichai/core'
-import { GRIS, clasesDeLeyenda, cortes as calcularCortes, valoresDe } from './colores'
+import { GRIS, clasesDeLeyenda, cortes as calcularCortes, valoresDe } from '../comun/colores'
+import { CONTROL, ErrorCarga } from '../comun/ui'
 import { useArancelesVia } from './api'
 
 // maplibre weighs more than the rest of the app: the map loads when the page opens, not with the first bundle
@@ -39,24 +40,20 @@ export function ArancelesViaPage({ workerUrl }: { workerUrl?: string }) {
         <label htmlFor="anio-aranceles" className="text-sm text-ink-muted">
           Año
         </label>
-        <select
-          id="anio-aranceles"
-          value={anio}
-          onChange={(e) => setAnio(Number(e.target.value))}
-          className="rounded-md border border-border bg-surface px-2 py-1 text-sm"
-        >
+        <select id="anio-aranceles" value={anio} onChange={(e) => setAnio(Number(e.target.value))} className={CONTROL}>
           {aniosDisponibles(actual).map((a) => (
             <option key={a} value={a}>
               {a}
             </option>
           ))}
         </select>
-        {consulta.isFetching && <span className="text-sm text-ink-muted">Cargando…</span>}
+        {/* always there, so screen readers announce the text when it changes */}
+        <span role="status" className="text-sm text-ink-muted">
+          {consulta.isFetching ? 'Cargando…' : ''}
+        </span>
       </div>
       {consulta.isError ? (
-        <p role="alert" className="rounded-md border border-border bg-danger-soft p-3 text-sm text-danger">
-          {mensajeDeError(consulta.error)}
-        </p>
+        <ErrorCarga>{mensajeDeError(consulta.error)}</ErrorCarga>
       ) : (
         <div className="relative min-h-96 flex-1 overflow-hidden rounded-md border border-border">
           <Suspense fallback={<div className="h-full w-full bg-surface-muted" />}>

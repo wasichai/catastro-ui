@@ -96,6 +96,15 @@ describe('ArancelesViaPage', () => {
     ).toEqual([`Valor por m² (${anioActual - 1})`, `sin arancel ${anioActual - 1}`, 'sin asignar'])
   })
 
+  it('keeps the loading status in the page, only its text changes', async () => {
+    fetch = mockFetch([{ path: '/catastro/vias/aranceles', body: coleccion([100]) }])
+    renderWithProviders(<ArancelesViaPage />)
+    const estado = screen.getByRole('status')
+    await screen.findByTestId('mapa')
+    await vi.waitFor(() => expect(estado).toBeEmptyDOMElement())
+    expect(screen.getByRole('status')).toBe(estado)
+  })
+
   it('shows a 403 as a message instead of the map', async () => {
     fetch = mockFetch([{ path: '/catastro/vias/aranceles', status: 403, body: { message: 'Forbidden' } }])
     renderWithProviders(<ArancelesViaPage />)

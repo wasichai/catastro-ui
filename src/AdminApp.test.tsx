@@ -25,7 +25,7 @@ beforeEach(() => {
 afterEach(() => fetch?.restore())
 
 describe('admin', () => {
-  it('signs in under the catastro prefix, with the gis and views screens only', async () => {
+  it('signs in under the catastro prefix, with the gis, views and catastro screens only', async () => {
     fetch = mockFetch([
       { method: 'POST', path: '/auth/login', body: { token: 't', expiresAt: '2026-12-31T00:00:00Z', user: admin } },
       { path: '/auth/me/permissions', body: { admin: true, objects: {} } },
@@ -40,7 +40,7 @@ describe('admin', () => {
     expect(await screen.findByRole('heading', { name: 'Inicio' })).toBeInTheDocument()
     expect(screen.getAllByText('Catastro Perené').length).toBeGreaterThan(0)
     expect(localStorage.getItem('catastro.token')).toBe('t')
-    for (const label of ['Vistas', 'Mapas', 'Capas']) {
+    for (const label of ['Vistas', 'Mapas', 'Capas', 'Aranceles por vía', 'Brechas']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument()
     }
     for (const label of ['Workflows', 'Páginas', 'Formularios', 'Documentos']) {

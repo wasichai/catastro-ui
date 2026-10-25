@@ -3,6 +3,7 @@ import { WasichaiApp } from '@wasichai/core'
 import { gisModule } from '@wasichai/gis'
 import { viewsModule } from '@wasichai/views'
 import { arancelesModule } from './arancelesModule'
+import { brechasModule } from './brechasModule'
 
 // the whole app is wasichai's admin, at "/": core plus the modules catastro-backend runs (views, gis).
 // workerUrl is maplibre's worker script, which main.tsx bundles: gis draws the lote and predio geometries with it
@@ -22,7 +23,7 @@ export function AdminApp({ workerUrl }: { workerUrl?: string }) {
         // the seed's admin, in development only
         defaultLoginEmail: import.meta.env.DEV ? 'admin@wasichai.local' : undefined
       }}
-      modules={[viewsModule(), gisModule({ workerUrl }), arancelesModule({ workerUrl })]}
+      modules={[viewsModule(), gisModule({ workerUrl }), arancelesModule({ workerUrl }), brechasModule({ workerUrl })]}
     />
   )
 }

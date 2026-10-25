@@ -12,7 +12,13 @@ const CAPAS = ['con-valor', 'sin-arancel-anio', 'sin-asignar'].map((id) => `${FU
 const ESTILO = {
   version: 8 as const,
   sources: {
-    osm: { type: 'raster' as const, tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' }
+    osm: {
+      type: 'raster' as const,
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }
   },
   layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }]
 }

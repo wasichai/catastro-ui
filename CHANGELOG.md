@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/wasichai/catastro-ui/compare/v1.0.0...v1.1.0) (2026-10-26)
+
+
+### Features
+
+* **mapas:** las teselas WMS de /geoserver/ llevan el token de la sesión ([#17](https://github.com/wasichai/catastro-ui/issues/17)) ([87d1a37](https://github.com/wasichai/catastro-ui/commit/87d1a3793aa54cd7ea919b0b4489aef7aa1b04fb))
+
 ## 1.0.0 (2026-10-26)
 
 

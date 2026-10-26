@@ -696,7 +696,7 @@ describe('BrechasPage', () => {
     fetch = mockFetch(rutas([{ path: '/gis/objects/brecha_ficha/map-views/brechas_categoria', body: vista }]))
     const { unmount } = renderWithProviders(<BrechasPage />, { modules: [gisModule()] })
     const enlace = await screen.findByRole('link', { name: 'Abrir como vista de mapa' })
-    expect(enlace).toHaveAttribute('href', '/gis/map?object=brecha_ficha&geometry=lote_geom&view=brechas_categoria&by=categoria&type=categories')
+    expect(enlace).toHaveAttribute('href', '/gis/map?object=brecha_ficha&geometry=lote_geom&view=brechas_categoria')
     unmount()
     fetch.restore()
     fetch = mockFetch(rutas())

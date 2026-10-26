@@ -128,7 +128,7 @@ describe('ArancelesViaPage', () => {
     ])
     renderWithProviders(<ArancelesViaPage />, { modules: [gisModule()] })
     const enlace = await screen.findByRole('link', { name: 'Abrir como vista de mapa' })
-    expect(enlace).toHaveAttribute('href', '/gis/map?object=tramo_via&geometry=geom&view=aranceles_valor&by=valor_m2&type=quantiles&classes=5')
+    expect(enlace).toHaveAttribute('href', '/gis/map?object=tramo_via&geometry=geom&view=aranceles_valor')
   })
 
   it('has no link to gis while the view does not exist', async () => {

@@ -28,5 +28,10 @@ export function AdminApp({ workerUrl }: { workerUrl?: string }) {
   useEffect(() => {
     void import('maplibre-gl/dist/maplibre-gl.css')
   }, [])
-  return <WasichaiApp config={CONFIG} modules={[viewsModule(), gisModule({ workerUrl }), arancelesModule({ workerUrl }), brechasModule({ workerUrl })]} />
+  return (
+    <WasichaiApp
+      config={CONFIG}
+      modules={[viewsModule(), gisModule({ workerUrl, wmsAuth: true }), arancelesModule({ workerUrl }), brechasModule({ workerUrl })]}
+    />
+  )
 }

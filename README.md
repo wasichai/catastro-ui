@@ -35,7 +35,13 @@ de catastro-backend; su README («WMS protegido») explica el contrato.
 MapLibre no manda cabeceras propias al pedir una tesela. Por eso cada mapa de esta app (`crearMapaBase`, en
 `src/comun/mapa.ts`, que usan Aranceles y Brechas) tiene un `transformRequest` (`conToken`): agrega
 `Authorization: Bearer <token>` (el `getToken()` de `@wasichai/core`) a las urls `/geoserver/` de este origen, y a
-ninguna otra (las teselas de OSM, por ejemplo). Sin sesión, la tesela sale sin token y nginx responde 401.
+ninguna otra (las teselas de OSM, por ejemplo). Sin sesión, la tesela sale sin token y nginx responde 401. Va al final
+de las opciones del mapa, así que ninguna página lo pisa.
+
+El WMS protegido solo sirve lo que piden estos mapas: un `GetMap` ráster (`image/png`) de `/geoserver/catastro/wms`,
+de las capas de la organización del usuario. Quien tenga una regla que le esconde filas o campos (filtro de dueño,
+alcance, un campo que no lee) no recibe teselas (403): el visor de Brechas sigue mostrando los lotes desde la API, y las
+capas WMS no aparecen dibujadas. Los detalles, en el README de catastro-backend.
 
 **Limitación de `@wasichai/gis` 1.2.0:** su `MapView` crea el mapa sin `transformRequest` ni forma de pasárselo. La
 vista previa WMS de `/gis/layers` no manda el token y sus teselas salen 401 (además pide la url de GeoServer tal como

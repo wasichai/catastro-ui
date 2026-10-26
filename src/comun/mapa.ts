@@ -71,8 +71,9 @@ export function crearMapaBase(contenedor: HTMLElement, workerUrl: string | undef
     center: [-75.73, -14.07],
     zoom: 12,
     attributionControl: { compact: true },
-    transformRequest: conToken,
-    ...opciones
+    ...opciones,
+    // last, so no page's options drop the token from the WMS tiles
+    transformRequest: conToken
   })
   mapa.addControl(new NavigationControl({ showCompass: false }), 'top-right')
   mapa.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-left')

@@ -68,4 +68,9 @@ describe('crearMapaBase', () => {
     expect(estado.opciones?.transformRequest).toBe(conToken)
     expect(estado.opciones?.boxZoom).toBe(false)
   })
+
+  it('a page cannot drop it with its own options', () => {
+    crearMapaBase(document.createElement('div'), undefined, { transformRequest: (url) => ({ url }) })
+    expect(estado.opciones?.transformRequest).toBe(conToken)
+  })
 })

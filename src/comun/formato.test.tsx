@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anioEn, fecha, fechaHora, plural, soles } from './formato'
+import { anioEn, fecha, fechaHora, metros, plural, soles } from './formato'
 
 describe('soles', () => {
   it('writes thousands and two decimals, a minus sign for negatives and a plus when asked', () => {
@@ -43,5 +43,17 @@ describe('anioEn', () => {
     const nocheVieja = new Date('2027-01-01T01:00:00Z')
     expect(anioEn('America/Lima', nocheVieja)).toBe(2026)
     expect(anioEn('UTC', nocheVieja)).toBe(2027)
+  })
+})
+
+describe('metros', () => {
+  it('writes an area with up to two decimals, its sign when asked and a dash without a number', () => {
+    expect(metros(95.25)).toBe('95.25 m²')
+    expect(metros('1200.5000000000')).toBe('1,200.5 m²')
+    expect(metros(15.25, { signo: true })).toBe('+15.25 m²')
+    expect(metros(-30, { signo: true })).toBe('−30 m²')
+    expect(metros(0.001, { signo: true })).toBe('0 m²')
+    expect(metros(null)).toBe('—')
+    expect(metros('abc')).toBe('—')
   })
 })

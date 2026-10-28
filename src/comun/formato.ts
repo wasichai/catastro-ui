@@ -20,6 +20,16 @@ export function soles(v: Monto, { minimo = 2, maximo = Math.max(2, minimo), sign
   return signo && n > 0 && !cero ? `+${cuerpo}` : cuerpo
 }
 
+// «95.25 m²», «+15.25 m²» with signo, «—» when there is no number: an area, up to 2 decimals
+export function metros(v: Monto, { signo = false }: { signo?: boolean } = {}): string {
+  if (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) return '—'
+  const n = Number(v)
+  const cuerpo = `${Math.abs(n).toLocaleString('es-PE', { maximumFractionDigits: 2 })} m²`
+  const cero = Number(Math.abs(n).toFixed(2)) === 0
+  if (n < 0 && !cero) return `−${cuerpo}`
+  return signo && n > 0 && !cero ? `+${cuerpo}` : cuerpo
+}
+
 export const cantidad = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocaleString('es-PE') : '—')
 
 // «1 ficha elegida», «3 fichas elegidas»

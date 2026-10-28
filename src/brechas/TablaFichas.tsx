@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MapPinOff } from 'lucide-react'
-import { Badge, Input, PageSizePagination, Table, Td, Th } from '@wasichai/ui'
+import { Badge, Button, Input, PageSizePagination, Table, Td, Th } from '@wasichai/ui'
 import { useWasichaiConfig } from '@wasichai/core'
 import { ZONA_LIMA, fechaHora, soles } from '../comun/formato'
 import { CONTROL } from '../comun/ui'
@@ -14,6 +14,7 @@ import {
   colorConfianza,
   etiquetaConfianza
 } from './colores'
+import { nombreDeFicha } from './DetalleFicha'
 import { CATEGORIAS, CONFIANZAS, ESTADOS, type Ficha, type Filtros, type Orden, type Pagina } from './tipos'
 
 export const TAMANIOS = [25, 50, 100] as const
@@ -185,11 +186,13 @@ export interface TablaFichasProps {
   size: number
   onPage: (p: number) => void
   onSize: (s: number) => void
+  // opens the detail of a ficha, with its niveles
+  onVer?: (ficha: Ficha) => void
 }
 
 // the fichas of the corte, a page at a time. the checkboxes are the same selection as the map's; a ficha without
 // codigo_municipal cannot be chosen, since a decision is kept by that code
-export function TablaFichas({ pagina, seleccion, onAlternar, onElegirPagina, page, size, onPage, onSize }: TablaFichasProps) {
+export function TablaFichas({ pagina, seleccion, onAlternar, onElegirPagina, page, size, onPage, onSize, onVer }: TablaFichasProps) {
   const zona = useWasichaiConfig().timeZone ?? ZONA_LIMA
   const filas = pagina?.content ?? []
   const elegibles = filas.flatMap((f) => (f.codigo_municipal ? [f.codigo_municipal] : []))
@@ -225,12 +228,17 @@ export function TablaFichas({ pagina, seleccion, onAlternar, onElegirPagina, pag
               <Th className="text-right">Diferencia de arbitrios</Th>
               <Th>Supera 5 UIT</Th>
               <Th>Estado</Th>
+              {onVer && (
+                <Th>
+                  <span className="sr-only">Detalle</span>
+                </Th>
+              )}
             </tr>
           </thead>
           <tbody>
             {filas.length === 0 && (
               <tr>
-                <Td colSpan={13} className="text-center text-ink-muted">
+                <Td colSpan={onVer ? 14 : 13} className="text-center text-ink-muted">
                   {pagina ? 'Ninguna ficha cumple los filtros.' : 'Cargando…'}
                 </Td>
               </tr>
@@ -289,6 +297,13 @@ export function TablaFichas({ pagina, seleccion, onAlternar, onElegirPagina, pag
                     {ETIQUETA_ESTADO[f.estado] ?? f.estado}
                     {f.decidido_en && <span className="block text-xs text-ink-muted">{decision(f, zona)}</span>}
                   </Td>
+                  {onVer && (
+                    <Td>
+                      <Button variant="ghost" size="sm" aria-label={`Ver los niveles de ${nombreDeFicha(f)}`} onClick={() => onVer(f)}>
+                        Niveles
+                      </Button>
+                    </Td>
+                  )}
                 </tr>
               )
             })}

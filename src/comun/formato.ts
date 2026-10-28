@@ -9,11 +9,12 @@ export interface OpcionesSoles {
   signo?: boolean
 }
 
-// «S/ 1,234.50», «−S/ 50.00», or «+S/ 50» with signo; «—» when there is no number
+// «S/ 1,234.50», «−S/ 50.00», or «+S/ 50» with signo; «—» when there is no number. the space after «S/» is a
+// no-break one (U+00A0), so a narrow card never leaves «S/» on one line and the number on the next
 export function soles(v: Monto, { minimo = 2, maximo = Math.max(2, minimo), signo = false }: OpcionesSoles = {}): string {
   if (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) return '—'
   const n = Number(v)
-  const cuerpo = `S/ ${Math.abs(n).toLocaleString('es-PE', { minimumFractionDigits: minimo, maximumFractionDigits: maximo })}`
+  const cuerpo = `S/\u00a0${Math.abs(n).toLocaleString('es-PE', { minimumFractionDigits: minimo, maximumFractionDigits: maximo })}`
   // rounding may turn a tiny negative into zero: no sign then
   const cero = Number(Math.abs(n).toFixed(maximo)) === 0
   if (n < 0 && !cero) return `−${cuerpo}`

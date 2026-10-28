@@ -187,6 +187,21 @@ const abrirDecision = async (...codigos: string[]) => {
 }
 
 describe('BrechasPage', () => {
+  it('puts everything under the header in a body with the p-8 of the pages of @wasichai/core', async () => {
+    await abrir()
+    // the shell's <main> has no padding: without this the content touches the sidebar and the right edge
+    const cuerpo = screen.getByTestId('cuerpo-brechas')
+    expect(cuerpo).toHaveClass('p-8')
+    expect(cuerpo).not.toContainElement(screen.getByRole('heading', { level: 1, name: 'Brechas' }))
+    for (const dentro of [
+      screen.getByLabelText('Corte'),
+      screen.getByRole('group', { name: 'Diferencia de impuesto' }),
+      screen.getByTestId('mapa-lotes'),
+      screen.getByRole('cell', { name: 'M1' })
+    ])
+      expect(cuerpo).toContainElement(dentro)
+  })
+
   it('shows the KPIs and the bars of the corte', async () => {
     await abrir()
     expect(within(screen.getByRole('group', { name: 'Diferencia de impuesto' })).getByText('+S/ 850.50')).toBeInTheDocument()
@@ -200,7 +215,8 @@ describe('BrechasPage', () => {
     expect(within(screen.getByRole('group', { name: 'Con geometría' })).getByText('28')).toBeInTheDocument()
     const categorias = screen.getByRole('list', { name: 'Por categoría' })
     expect(within(categorias).getByText('Omiso')).toBeInTheDocument()
-    expect(within(categorias).getByText('10 · +S/ 500.00')).toBeInTheDocument()
+    // no-break spaces: in a narrow card it may wrap only after the «·», never inside the amount
+    expect(within(categorias).getByText('10 · +S/ 500.00').textContent).toBe('10\u00a0· +S/\u00a0500.00')
     expect(screen.getByTestId('barra-OMISO')).toHaveStyle({ width: '100%' })
     expect(screen.getByTestId('barra-COINCIDE')).toHaveStyle({ width: '50%' })
     expect(within(screen.getByRole('list', { name: 'Por estado' })).getByText('Descartado')).toBeInTheDocument()
@@ -723,6 +739,9 @@ describe('BrechasPage', () => {
     expect(screen.getByText(/Pide al equipo técnico/)).toBeInTheDocument()
     expect(screen.getByText('model/importar_corte_brecha.py')).toBeInTheDocument()
     expect(screen.queryByTestId('mapa')).not.toBeInTheDocument()
+    // the same side padding as the header here too
+    expect(screen.getByTestId('cuerpo-brechas')).toHaveClass('p-8')
+    expect(screen.getByTestId('cuerpo-brechas')).toContainElement(screen.getByText(/Pide al equipo técnico/))
   })
 
   it('keeps the selector when the chosen corte is gone, and goes back to the latest', async () => {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Download, MapPinned } from 'lucide-react'
 import { ApiError, EmptyState, LoadingState, PageHeader, useApiClient, useAuth } from '@wasichai/core'
 import { Alert, Button } from '@wasichai/ui'
@@ -50,9 +50,18 @@ function SinCortes() {
   )
 }
 
-const ENCABEZADO = (
-  <PageHeader title="Brechas" subtitle="Lo que la municipalidad cobra frente a lo que levantó el catastro, por corte, y las decisiones sobre cada ficha" />
-)
+// the header and, under it, the body with the same p-8 as the pages of @wasichai/core: the shell's <main> has no
+// padding of its own, so the page brings it
+function Pagina({ className, children }: { className: string; children: ReactNode }) {
+  return (
+    <>
+      <PageHeader title="Brechas" subtitle="Lo que la municipalidad cobra frente a lo que levantó el catastro, por corte, y las decisiones sobre cada ficha" />
+      <div data-testid="cuerpo-brechas" className={`p-8 ${className}`}>
+        {children}
+      </div>
+    </>
+  )
+}
 
 // «Brechas»: what srtm's brecha found in one corte, on a map and a table, and the decisions taken over its fichas
 export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
@@ -129,31 +138,27 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
 
   if (cortes.isPending)
     return (
-      <div className="space-y-3">
-        {ENCABEZADO}
+      <Pagina className="space-y-3">
         <LoadingState />
-      </div>
+      </Pagina>
     )
   if (sinCortes(cortes.error) || (cortes.isSuccess && !cortes.data.length))
     return (
-      <div className="space-y-3">
-        {ENCABEZADO}
+      <Pagina className="space-y-3">
         <SinCortes />
-      </div>
+      </Pagina>
     )
   if (cortes.error)
     return (
-      <div className="space-y-3">
-        {ENCABEZADO}
+      <Pagina className="space-y-3">
         <ErrorCarga onReintentar={() => void cortes.refetch()}>{mensajeDeError(cortes.error)}</ErrorCarga>
-      </div>
+      </Pagina>
     )
 
   const cargando = panel.isFetching || fichas.isFetching || lotes.isFetching
 
   return (
-    <div className="flex flex-col gap-4">
-      {ENCABEZADO}
+    <Pagina className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor="corte-brecha" className="text-sm text-ink-muted">
           Corte
@@ -210,7 +215,8 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
         <LoadingState />
       )}
 
-      <section aria-label="Visor" className="grid gap-3 lg:grid-cols-[16rem_1fr]">
+      {/* minmax(0,1fr): the column takes the width of the body, not that of the widest control in it */}
+      <section aria-label="Visor" className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
         <CapasMapa colorear={colorear} onColorear={setColorear} mostrarVias={mostrarVias} onMostrarVias={setMostrarVias} anio={anio} wms={wms} onWms={setWms} />
         <div className="relative h-[32rem] overflow-hidden rounded-md border border-border">
           <Suspense fallback={<div className="h-full w-full bg-surface-muted" />}>
@@ -292,6 +298,6 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
           onDecidido={() => setSeleccion(new Set())}
         />
       )}
-    </div>
+    </Pagina>
   )
 }

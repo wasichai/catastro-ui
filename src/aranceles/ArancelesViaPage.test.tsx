@@ -157,7 +157,7 @@ describe('popupHtml', () => {
     const html = popupHtml(tramo(1, 356, { nom_via: 'LIMA <1>', asignacion: 'CERCANIA', id_aranc: '0010000401-01' }).properties)
     expect(html).toContain('CA. LIMA &lt;1&gt;')
     expect(html).toContain('0010000401-01')
-    expect(html).toContain('S/ 356 por m²')
+    expect(html).toContain('S/\u00a0356 por m²')
     expect(html).toContain('Por cercanía')
   })
 

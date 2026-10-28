@@ -3,12 +3,14 @@ import { anioEn, fecha, fechaHora, metros, plural, soles } from './formato'
 
 describe('soles', () => {
   it('writes thousands and two decimals, a minus sign for negatives and a plus when asked', () => {
-    expect(soles(12345.5)).toBe('S/ 12,345.50')
-    expect(soles('-50')).toBe('−S/ 50.00')
-    expect(soles(50, { signo: true })).toBe('+S/ 50.00')
-    expect(soles(0, { signo: true })).toBe('S/ 0.00')
-    expect(soles(-0.001)).toBe('S/ 0.00')
-    expect(soles(1200, { minimo: 0, maximo: 0 })).toBe('S/ 1,200')
+    expect(soles(12345.5)).toBe('S/\u00a012,345.50')
+    // a no-break space after «S/», so the amount never wraps inside
+    expect(soles(1)).not.toContain(' ')
+    expect(soles('-50')).toBe('−S/\u00a050.00')
+    expect(soles(50, { signo: true })).toBe('+S/\u00a050.00')
+    expect(soles(0, { signo: true })).toBe('S/\u00a00.00')
+    expect(soles(-0.001)).toBe('S/\u00a00.00')
+    expect(soles(1200, { minimo: 0, maximo: 0 })).toBe('S/\u00a01,200')
     expect(soles(null)).toBe('—')
     expect(soles('x')).toBe('—')
   })

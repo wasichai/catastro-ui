@@ -215,7 +215,8 @@ describe('BrechasPage', () => {
     expect(within(screen.getByRole('group', { name: 'Con geometría' })).getByText('28')).toBeInTheDocument()
     const categorias = screen.getByRole('list', { name: 'Por categoría' })
     expect(within(categorias).getByText('Omiso')).toBeInTheDocument()
-    expect(within(categorias).getByText('10 · +S/ 500.00')).toBeInTheDocument()
+    // no-break spaces: in a narrow card it may wrap only after the «·», never inside the amount
+    expect(within(categorias).getByText('10 · +S/ 500.00').textContent).toBe('10\u00a0· +S/\u00a0500.00')
     expect(screen.getByTestId('barra-OMISO')).toHaveStyle({ width: '100%' })
     expect(screen.getByTestId('barra-COINCIDE')).toHaveStyle({ width: '50%' })
     expect(within(screen.getByRole('list', { name: 'Por estado' })).getByText('Descartado')).toBeInTheDocument()

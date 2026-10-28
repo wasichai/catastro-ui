@@ -9,7 +9,8 @@ function Kpi({ etiqueta, valor, detalle }: { etiqueta: string; valor: string; de
     <Card role="group" aria-label={etiqueta}>
       <CardBody className="space-y-1">
         <p className="text-sm text-ink-muted">{etiqueta}</p>
-        <p className="text-2xl font-semibold text-ink tabular-nums">{valor}</p>
+        {/* on one line: the grid below gives each card room for it */}
+        <p className="text-2xl font-semibold whitespace-nowrap text-ink tabular-nums">{valor}</p>
         {detalle && <p className="text-xs text-ink-muted">{detalle}</p>}
       </CardBody>
     </Card>
@@ -37,7 +38,7 @@ export function Barras({ titulo, barras }: { titulo: string; barras: Barra[] }) 
         ) : (
           <ul aria-label={titulo} className="space-y-1.5">
             {barras.map((b) => (
-              <li key={b.clave} className="grid grid-cols-[7rem_1fr_auto] items-center gap-2 text-xs">
+              <li key={b.clave} className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_auto] items-center gap-2 text-xs">
                 <span className="truncate text-ink" title={b.etiqueta}>
                   {b.etiqueta}
                 </span>
@@ -58,14 +59,17 @@ export function Barras({ titulo, barras }: { titulo: string; barras: Barra[] }) 
   )
 }
 
-const fichasYDelta = (fichas: number, delta: unknown) => `${cantidad(fichas)} · ${soles(delta as number | null, { signo: true })}`
+// «10 · +S/ 500.00», which may break only after the «·»: a no-break space before it, and soles keeps the amount whole
+const fichasYDelta = (fichas: number, delta: unknown) => `${cantidad(fichas)}\u00a0· ${soles(delta as number | null, { signo: true })}`
 
 // the header of the corte: the KPIs and the bars, counted over every ficha of the corte
 export function Indicadores({ panel }: { panel: Panel }) {
   const { kpis } = panel
   return (
-    <section aria-label="Indicadores del corte" className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <section aria-label="Indicadores del corte" className="@container space-y-3">
+      {/* columns by the width of the section, not of the screen (the sidebar takes 15rem of it): a KPI card needs
+          ~15rem for «+S/ 1,234,567.89» on one line, a card of bars ~21rem for «1,234 · +S/ 12,345.00» */}
+      <div className="grid grid-cols-1 gap-3 @min-[32rem]:grid-cols-2 @min-[48rem]:grid-cols-3 @min-[96rem]:grid-cols-6">
         <Kpi
           etiqueta="Diferencia de impuesto"
           valor={soles(kpis.delta_impuesto, { signo: true })}
@@ -81,7 +85,7 @@ export function Indicadores({ panel }: { panel: Panel }) {
         />
         <Kpi etiqueta="Con geometría" valor={cantidad(kpis.con_geometria)} detalle={`de ${cantidad(kpis.fichas)}`} />
       </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 @min-[43rem]:grid-cols-2 @min-[87rem]:grid-cols-4">
         <Barras
           titulo="Por categoría"
           barras={panel.por_categoria.map((c) => ({

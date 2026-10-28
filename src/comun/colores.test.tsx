@@ -22,11 +22,11 @@ describe('clasesPorValor', () => {
     const clases = clasesPorValor(valores)
     expect(clases).toMatchObject({ by: 'valor_m2', type: 'quantiles' })
     expect(legendItems(clases).map((c) => c.label)).toEqual([
-      'Menos de S/ 120',
-      'S/ 120 a menos de S/ 140',
-      'S/ 140 a menos de S/ 160',
-      'S/ 160 a menos de S/ 180',
-      'S/ 180 o más'
+      'Menos de S/\u00a0120',
+      'S/\u00a0120 a menos de S/\u00a0140',
+      'S/\u00a0140 a menos de S/\u00a0160',
+      'S/\u00a0160 a menos de S/\u00a0180',
+      'S/\u00a0180 o más'
     ])
     expect(legendItems(clases).map((c) => c.color)).toEqual([...PALETA])
     expect(clases.classes.map((c) => [c.min, c.max])).toEqual([

@@ -49,13 +49,13 @@ describe('leyendaDe', () => {
 
   it('names the symmetric classes of the difference with their sign, the same whatever the data', () => {
     expect(leyendaDe('delta').map((c) => c.label)).toEqual([
-      '+S/ 500 o más',
-      '+S/ 50 a +S/ 500',
-      '+S/ 1 a +S/ 50',
-      'Sin cambio (−S/ 1 a +S/ 1)',
-      '−S/ 50 a −S/ 1',
-      '−S/ 500 a −S/ 50',
-      'Menos de −S/ 500',
+      '+S/\u00a0500 o más',
+      '+S/\u00a050 a +S/\u00a0500',
+      '+S/\u00a01 a +S/\u00a050',
+      'Sin cambio (−S/\u00a01 a +S/\u00a01)',
+      '−S/\u00a050 a −S/\u00a01',
+      '−S/\u00a0500 a −S/\u00a050',
+      'Menos de −S/\u00a0500',
       'Sin dato (sin levantar)'
     ])
     expect(leyendaDe('delta').map((c) => c.color)).toEqual([...[...DIVERGENTE.sube].reverse(), DIVERGENTE.neutro, ...DIVERGENTE.baja.slice().reverse(), GRIS])
@@ -97,7 +97,7 @@ describe('popupHtml', () => {
     expect(html).toContain('M&lt;1&gt;')
     expect(html).toContain('Subvaluado')
     expect(html).toContain('Dudoso')
-    expect(html).toContain('+S/ 12.50')
+    expect(html).toContain('+S/\u00a012.50')
     expect(html).toContain('A fiscalizar')
   })
 

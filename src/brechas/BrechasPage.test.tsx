@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { act, fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockFetch, renderWithProviders, type FetchMock, type MockRoute } from '@wasichai/testing'
@@ -165,6 +165,7 @@ beforeEach(() => localStorage.clear())
 afterEach(() => {
   fetch?.restore()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 const abrir = async (extra: MockRoute[] = [], permissions?: { admin: boolean; objects: Record<string, string[]> }) => {
@@ -785,6 +786,72 @@ describe('the detail of a ficha', () => {
     expect(within(dialogo).getByText('Diferencia de impuesto +S/ 20.00')).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  // a screen of the given width for matchMedia, which jsdom lacks; change() moves it and tells the listeners
+  const pantalla = (ancho: number) => {
+    const oyentes = new Set<() => void>()
+    const media = (q: string) => ({
+      get matches() {
+        // the theme asks for prefers-color-scheme too: not a width, not matched
+        const min = /min-width: (\d+)rem/.exec(q)
+        return !!min && ancho >= Number(min[1]) * 16
+      },
+      addEventListener: (_: string, f: () => void) => oyentes.add(f),
+      removeEventListener: (_: string, f: () => void) => oyentes.delete(f)
+    })
+    vi.stubGlobal('matchMedia', media)
+    return {
+      cambiar: (a: number) => {
+        ancho = a
+        oyentes.forEach((f) => f())
+      }
+    }
+  }
+
+  it('on a narrow screen shows one card per piso: the piso and its estado, then its areas by label', async () => {
+    pantalla(390)
+    await abrir([{ path: '/catastro/brechas/fichas/f1', body: detalle(NIVELES) }])
+    await userEvent.click(screen.getByRole('button', { name: 'Ver los niveles de M1' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Ficha M1' })
+    const lista = await within(dialogo).findByRole('list', { name: 'Niveles de la ficha' })
+    expect(within(dialogo).queryByRole('table')).not.toBeInTheDocument()
+    const pisos = within(lista).getAllByRole('listitem')
+    expect(pisos.map((p) => p.getAttribute('aria-label'))).toEqual(['Piso -1', 'Piso 1', 'Piso 2', 'Piso 3', 'Piso 4', 'Piso sin número'])
+    // the estado is text, not only a colour
+    expect(within(pisos[1]!).getByText('En ambos')).toBeInTheDocument()
+    expect(within(pisos[0]!).getByText('Solo en rentas')).toBeInTheDocument()
+    expect(within(pisos[4]!).getByText('Solo en catastro')).toBeInTheDocument()
+    expect(within(pisos[5]!).getByText('Ambiguo')).toBeInTheDocument()
+    // each value under its label
+    const pares = (p: HTMLElement) =>
+      within(p)
+        .getAllByRole('term')
+        .map((t) => [t.textContent, t.nextElementSibling?.textContent])
+    expect(pares(pisos[1]!)).toEqual([
+      ['Área rentas', '80 m²'],
+      ['Área catastro', '95.25 m²'],
+      ['Δ m²', '+15.25 m²']
+    ])
+    expect(pares(pisos[0]!)).toEqual([
+      ['Área rentas', '30 m²'],
+      ['Área catastro', '—'],
+      ['Δ m²', '—']
+    ])
+    expect(within(pisos[2]!).getByText('−10 m²')).toBeInTheDocument()
+    // the total stays above the cards
+    expect(within(dialogo).getByText('Más área en catastro en los pisos de ambos:')).toHaveTextContent('+19.75 m²')
+  })
+
+  it('goes from the cards to the table when the screen widens', async () => {
+    const p = pantalla(390)
+    await abrir([{ path: '/catastro/brechas/fichas/f1', body: detalle(NIVELES) }])
+    await userEvent.click(screen.getByRole('button', { name: 'Ver los niveles de M1' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Ficha M1' })
+    expect(await within(dialogo).findByRole('list', { name: 'Niveles de la ficha' })).toBeInTheDocument()
+    act(() => p.cambiar(1280))
+    expect(within(dialogo).getByRole('table', { name: 'Niveles de la ficha' })).toBeInTheDocument()
+    expect(within(dialogo).queryByRole('list', { name: 'Niveles de la ficha' })).not.toBeInTheDocument()
   })
 
   it('says when the corte has no niveles for the ficha, or the role may not read them', async () => {

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/wasichai/catastro-ui/compare/v1.1.0...v1.2.0) (2026-10-28)
+
+
+### Features
+
+* **brechas:** los niveles de la ficha en el detalle de Brechas ([#21](https://github.com/wasichai/catastro-ui/issues/21)) ([39c5db9](https://github.com/wasichai/catastro-ui/commit/39c5db9e94024644da108ac8eafedef52a6b8ae7)), closes [#20](https://github.com/wasichai/catastro-ui/issues/20)
+* **brechas:** los niveles de la ficha en tarjetas por piso en pantallas estrechas ([#24](https://github.com/wasichai/catastro-ui/issues/24)) ([c2c58ac](https://github.com/wasichai/catastro-ui/commit/c2c58ac9115cc00e8e1ea7cf6428fca594f7f8f6)), closes [#23](https://github.com/wasichai/catastro-ui/issues/23)
+
+
+### Bug Fixes
+
+* **brechas:** la cabecera oculta de la tabla de fichas ya no ensancha la página ([#26](https://github.com/wasichai/catastro-ui/issues/26)) ([4cafe16](https://github.com/wasichai/catastro-ui/commit/4cafe165d3dbb64b655b7cdaf56d99e2167aeafd)), closes [#25](https://github.com/wasichai/catastro-ui/issues/25)
+
 ## [1.1.0](https://github.com/wasichai/catastro-ui/compare/v1.0.0...v1.1.0) (2026-10-26)
 
 

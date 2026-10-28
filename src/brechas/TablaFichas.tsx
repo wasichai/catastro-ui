@@ -229,7 +229,9 @@ export function TablaFichas({ pagina, seleccion, onAlternar, onElegirPagina, pag
               <Th>Supera 5 UIT</Th>
               <Th>Estado</Th>
               {onVer && (
-                <Th>
+                // relative: sr-only is absolute, and the Table's scroll is not positioned. without a positioned
+                // ancestor the span is placed on the document, outside the scroll, and widens the page
+                <Th className="relative">
                   <span className="sr-only">Detalle</span>
                 </Th>
               )}

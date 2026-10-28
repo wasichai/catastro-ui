@@ -1,6 +1,7 @@
 import { ApiError, LoadingState } from '@wasichai/core'
 import { Badge, Dialog, DialogContent, DialogDescription, DialogTitle, Table, Td, Th } from '@wasichai/ui'
 import { metros, soles } from '../comun/formato'
+import { usePantallaAncha } from '../comun/pantalla'
 import { ErrorCarga } from '../comun/ui'
 import { useFicha } from './api'
 import { COLOR_CATEGORIA, COLOR_NIVEL, ETIQUETA_CATEGORIA, ETIQUETA_ESTADO, ETIQUETA_NIVEL } from './colores'
@@ -25,7 +26,45 @@ function mensajeDeError(error: Error): string {
   return 'No se pudo cargar la ficha.'
 }
 
-function TablaNiveles({ niveles }: { niveles: Nivel[] }) {
+// the estado of a piso: its colour and, for who does not tell colours apart, its name
+function ChipNivel({ estado }: { estado: Nivel['estado'] }) {
+  return (
+    <Badge className="gap-1 whitespace-nowrap">
+      <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: COLOR_NIVEL[estado] }} />
+      {ETIQUETA_NIVEL[estado] ?? estado}
+    </Badge>
+  )
+}
+
+const nombreDePiso = (n: Nivel) => (n.piso === null ? 'Piso sin número' : `Piso ${n.piso}`)
+
+// a narrow screen: one card per piso, the piso and its estado on top and the areas below, so the estado is never
+// scrolled out of view as it is in the table
+function TarjetasNiveles({ niveles }: { niveles: Nivel[] }) {
+  return (
+    <ul aria-label="Niveles de la ficha" className="space-y-2">
+      {niveles.map((n, i) => (
+        <li key={`${n.piso ?? 'sin'}-${i}`} aria-label={nombreDePiso(n)} className="rounded-md border border-border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium text-ink">{nombreDePiso(n)}</span>
+            <ChipNivel estado={n.estado} />
+          </div>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-ink-muted">Área rentas</dt>
+            <dd className="text-right text-ink tabular-nums">{metros(n.area_rentas)}</dd>
+            <dt className="text-ink-muted">Área catastro</dt>
+            <dd className="text-right text-ink tabular-nums">{metros(n.area_catastro)}</dd>
+            <dt className="text-ink-muted">Δ m²</dt>
+            <dd className="text-right font-medium text-ink tabular-nums">{metros(n.delta, { signo: true })}</dd>
+          </dl>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function Niveles({ niveles }: { niveles: Nivel[] }) {
+  const ancha = usePantallaAncha()
   if (!niveles.length) return <p className="text-sm text-ink-muted">Sin niveles en este corte</p>
   return (
     <div className="space-y-2">
@@ -33,35 +72,39 @@ function TablaNiveles({ niveles }: { niveles: Nivel[] }) {
         {'Más área en catastro en los pisos de ambos: '}
         <span className="font-medium tabular-nums">{metros(excesoPar(niveles), { signo: true })}</span>
       </p>
-      <div className="overflow-x-auto rounded-md border border-border">
-        <Table aria-label="Niveles de la ficha">
-          <thead>
-            <tr>
-              <Th>Piso</Th>
-              <Th className="text-right">Área rentas</Th>
-              <Th className="text-right">Área catastro</Th>
-              <Th className="text-right">Δ m²</Th>
-              <Th>Estado</Th>
+      {ancha ? <TablaNiveles niveles={niveles} /> : <TarjetasNiveles niveles={niveles} />}
+    </div>
+  )
+}
+
+// a wide screen: the pisos side by side, in a table
+function TablaNiveles({ niveles }: { niveles: Nivel[] }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-border">
+      <Table aria-label="Niveles de la ficha">
+        <thead>
+          <tr>
+            <Th>Piso</Th>
+            <Th className="text-right">Área rentas</Th>
+            <Th className="text-right">Área catastro</Th>
+            <Th className="text-right">Δ m²</Th>
+            <Th>Estado</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {niveles.map((n, i) => (
+            <tr key={`${n.piso ?? 'sin'}-${i}`}>
+              <Td className="tabular-nums">{n.piso ?? '—'}</Td>
+              <Td className="text-right tabular-nums whitespace-nowrap">{metros(n.area_rentas)}</Td>
+              <Td className="text-right tabular-nums whitespace-nowrap">{metros(n.area_catastro)}</Td>
+              <Td className="text-right font-medium tabular-nums whitespace-nowrap">{metros(n.delta, { signo: true })}</Td>
+              <Td>
+                <ChipNivel estado={n.estado} />
+              </Td>
             </tr>
-          </thead>
-          <tbody>
-            {niveles.map((n, i) => (
-              <tr key={`${n.piso ?? 'sin'}-${i}`}>
-                <Td className="tabular-nums">{n.piso ?? '—'}</Td>
-                <Td className="text-right tabular-nums whitespace-nowrap">{metros(n.area_rentas)}</Td>
-                <Td className="text-right tabular-nums whitespace-nowrap">{metros(n.area_catastro)}</Td>
-                <Td className="text-right font-medium tabular-nums whitespace-nowrap">{metros(n.delta, { signo: true })}</Td>
-                <Td>
-                  <Badge className="gap-1 whitespace-nowrap">
-                    <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: COLOR_NIVEL[n.estado] }} />
-                    {ETIQUETA_NIVEL[n.estado] ?? n.estado}
-                  </Badge>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      </div>
+          ))}
+        </tbody>
+      </Table>
     </div>
   )
 }
@@ -99,7 +142,7 @@ export function DetalleFicha({ corte, ficha, onCerrar }: DetalleFichaProps) {
                 <ErrorCarga onReintentar={() => void detalle.refetch()}>{mensajeDeError(detalle.error)}</ErrorCarga>
               ) : detalle.data ? (
                 // an API older than catastro-backend#75 answers no niveles
-                <TablaNiveles niveles={detalle.data.niveles ?? []} />
+                <Niveles niveles={detalle.data.niveles ?? []} />
               ) : (
                 <LoadingState />
               )}

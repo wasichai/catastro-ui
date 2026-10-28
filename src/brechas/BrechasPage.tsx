@@ -11,10 +11,11 @@ import { AbrirVistaDeMapa } from '../comun/VistaDeMapa'
 import { FILTROS_VACIOS, descargarCsv, sinCortes, useCortes, useFichas, useLotes, usePanel } from './api'
 import { CapasMapa, Leyenda } from './CapasMapa'
 import { leyendaDe, type Colorear } from './colores'
+import { DetalleFicha } from './DetalleFicha'
 import { DialogoDecision } from './DialogoDecision'
 import { Indicadores } from './Indicadores'
 import { FiltrosFichas, TablaFichas } from './TablaFichas'
-import type { CapaWms, Corte, Filtros, Orden } from './tipos'
+import type { CapaWms, Corte, Ficha, Filtros, Orden } from './tipos'
 
 // maplibre weighs more than the rest of the app: the map loads when the page opens, not with the first bundle
 const BrechasMapa = lazy(() => import('./BrechasMapa'))
@@ -71,6 +72,7 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
   const [wms, setWms] = useState<CapaWms[]>([])
   const [seleccion, setSeleccion] = useState<ReadonlySet<string>>(new Set())
   const [decidiendo, setDecidiendo] = useState<string[] | null>(null)
+  const [viendo, setViendo] = useState<Ficha | null>(null)
   const [errorCsv, setErrorCsv] = useState<string | null>(null)
   const [exportando, setExportando] = useState(false)
 
@@ -274,9 +276,12 @@ export function BrechasPage({ workerUrl }: { workerUrl?: string }) {
             size={size}
             onPage={setPage}
             onSize={(s) => (setSize(s), setPage(0))}
+            onVer={setViendo}
           />
         )}
       </section>
+
+      <DetalleFicha corte={corte} ficha={viendo} onCerrar={() => setViendo(null)} />
 
       {puedeDecidir && anio !== undefined && (
         <DialogoDecision

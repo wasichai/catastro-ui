@@ -7,7 +7,7 @@ import { brechasModule } from '../brechasModule'
 import type { BrechasMapaProps } from './BrechasMapa'
 import { BrechasPage } from './BrechasPage'
 import { DIVERGENTE } from './colores'
-import type { Corte, Ficha, LoteFeature, Panel } from './tipos'
+import type { Corte, DetalleFicha, Ficha, LoteFeature, Panel } from './tipos'
 
 // jsdom has no webgl: the map is a stub that shows what it was given and lets the test select like a click or a box
 vi.mock('./BrechasMapa', () => ({
@@ -743,6 +743,64 @@ describe('BrechasPage', () => {
     fetch = mockFetch([{ path: '/catastro/brechas/cortes', status: 403, body: { message: 'Forbidden' } }])
     renderWithProviders(<BrechasPage />)
     expect(await screen.findByRole('alert')).toHaveTextContent('No tienes permiso para ver las brechas.')
+  })
+})
+
+describe('the detail of a ficha', () => {
+  const detalle = (niveles: DetalleFicha['niveles']): DetalleFicha => ({ ...fichas[0]!, niveles })
+  const NIVELES: DetalleFicha['niveles'] = [
+    { piso: -1, area_rentas: 30, area_catastro: null, estado: 'SOLO_RENTAS', delta: null },
+    { piso: 1, area_rentas: 80, area_catastro: '95.2500000000', estado: 'PAR', delta: '15.25' },
+    { piso: 2, area_rentas: 60, area_catastro: 50, estado: 'PAR', delta: -10 },
+    { piso: 3, area_rentas: 40, area_catastro: 44.5, estado: 'PAR', delta: 4.5 },
+    { piso: 4, area_rentas: null, area_catastro: 40, estado: 'SOLO_CATASTRO', delta: null },
+    { piso: null, area_rentas: 12.5, area_catastro: 20, estado: 'AMBIGUO', delta: 7.5 }
+  ]
+
+  it('shows the niveles of the ficha, by piso, with their Δ and the excess of catastro on the pisos of both', async () => {
+    const f = await abrir([{ path: '/catastro/brechas/fichas/f1', body: detalle(NIVELES) }])
+    await userEvent.click(screen.getByRole('button', { name: 'Ver los niveles de M1' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Ficha M1' })
+    const tabla = await within(dialogo).findByRole('table', { name: 'Niveles de la ficha' })
+    expect(ultimaDe(f, '/catastro/brechas/fichas/f1').get('corte')).toBe(CORTE_A)
+    expect(
+      within(tabla)
+        .getAllByRole('columnheader')
+        .map((c) => c.textContent)
+    ).toEqual(['Piso', 'Área rentas', 'Área catastro', 'Δ m²', 'Estado'])
+    const filas = within(tabla).getAllByRole('row').slice(1)
+    expect(filas.map((r) => within(r).getAllByRole('cell')[0]!.textContent)).toEqual(['-1', '1', '2', '3', '4', '—'])
+    expect(
+      within(filas[1]!)
+        .getAllByRole('cell')
+        .map((c) => c.textContent)
+    ).toEqual(['1', '80 m²', '95.25 m²', '+15.25 m²', 'En ambos'])
+    expect(within(filas[2]!).getByText('−10 m²')).toBeInTheDocument()
+    expect(within(filas[0]!).getByText('Solo en rentas')).toBeInTheDocument()
+    expect(within(filas[4]!).getByText('Solo en catastro')).toBeInTheDocument()
+    expect(within(filas[5]!).getByText('Ambiguo')).toBeInTheDocument()
+    // 15.25 + 4.5: the PAR pisos where catastro is larger; the −10, the AMBIGUO and the pisos in only one are left out
+    expect(within(dialogo).getByText('Más área en catastro en los pisos de ambos:')).toHaveTextContent('+19.75 m²')
+    // what the table says of the ficha
+    expect(within(dialogo).getByText('Diferencia de impuesto +S/ 20.00')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('says when the corte has no niveles for the ficha, or the role may not read them', async () => {
+    await abrir([{ path: '/catastro/brechas/fichas/f1', body: detalle([]) }])
+    await userEvent.click(screen.getByRole('button', { name: 'Ver los niveles de M1' }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(await within(dialogo).findByText('Sin niveles en este corte')).toBeInTheDocument()
+    expect(within(dialogo).queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('names a ficha without code by its predio, and says when it is gone from the corte', async () => {
+    await abrir([{ path: '/catastro/brechas/fichas/f4', status: 404, body: { message: 'No existe la ficha' } }])
+    await userEvent.click(screen.getByRole('button', { name: 'Ver los niveles de Predio P-9' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Ficha Predio P-9' })
+    expect(await within(dialogo).findByText('La ficha ya no está en este corte.')).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
 })
 

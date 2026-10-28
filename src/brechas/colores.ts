@@ -2,7 +2,7 @@ import type { ExpressionSpecification } from 'maplibre-gl'
 import { colorExpression, legendItems, type LegendItem, type StyleClasses } from '@wasichai/gis'
 import { GRIS } from '../comun/colores'
 import { soles } from '../comun/formato'
-import type { Categoria, Confianza, Estado } from './tipos'
+import type { Categoria, Confianza, Estado, EstadoNivel } from './tipos'
 
 // the fixed categorical colours of the dashboard: the map, its legend, the chips and the bars all read them from here.
 // hex, like the aranceles palette, because maplibre does not read the oklch of wasichai's themes. OMISO (red) and
@@ -25,6 +25,17 @@ export const COLOR_ESTADO: Record<Estado, string> = {
   INSPECCIONADO: '#4e79a7',
   A_FISCALIZAR: '#e15759',
   DESCARTADO: GRIS
+}
+
+// a piso in both (blue, as CONFIABLE), only declared (orange), only surveyed (red, as OMISO: area the municipalidad does
+// not charge) or that srtm could not match (grey)
+export const COLOR_NIVEL: Record<EstadoNivel, string> = { PAR: '#4e79a7', SOLO_RENTAS: '#f28e2b', SOLO_CATASTRO: '#e15759', AMBIGUO: GRIS }
+
+export const ETIQUETA_NIVEL: Record<EstadoNivel, string> = {
+  PAR: 'En ambos',
+  SOLO_RENTAS: 'Solo en rentas',
+  SOLO_CATASTRO: 'Solo en catastro',
+  AMBIGUO: 'Ambiguo'
 }
 
 export const ETIQUETA_CATEGORIA: Record<Categoria, string> = {

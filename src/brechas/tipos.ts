@@ -3,10 +3,13 @@
 export const CATEGORIAS = ['OMISO', 'SIN_CATASTRO', 'SIN_VALOR', 'SUBVALUADO', 'SOBREVALUADO', 'COINCIDE', 'SIN_LEVANTAR'] as const
 export const CONFIANZAS = ['CONFIABLE', 'DUDOSO', 'SIN_LEVANTAR'] as const
 export const ESTADOS = ['PENDIENTE', 'A_INSPECCIONAR', 'INSPECCIONADO', 'A_FISCALIZAR', 'DESCARTADO'] as const
+// how srtm matched a piso: in both, in only one, or it could not tell
+export const ESTADOS_NIVEL = ['PAR', 'SOLO_RENTAS', 'SOLO_CATASTRO', 'AMBIGUO'] as const
 
 export type Categoria = (typeof CATEGORIAS)[number]
 export type Confianza = (typeof CONFIANZAS)[number]
 export type Estado = (typeof ESTADOS)[number]
+export type EstadoNivel = (typeof ESTADOS_NIVEL)[number]
 
 // a DECIMAL may come as a number or as its text
 export type Decimal = number | string | null
@@ -75,6 +78,22 @@ export interface Ficha {
   nota: string | null
   decidido_en: string | null
   con_geometria: boolean
+}
+
+// a piso of a ficha (brecha_nivel_ficha): the declared area, the surveyed one and delta = catastro − rentas when it
+// has both
+export interface Nivel {
+  piso: number | null
+  area_rentas: Decimal
+  area_catastro: Decimal
+  estado: EstadoNivel
+  delta: Decimal
+}
+
+// GET /fichas/{id}: the row of /fichas and its niveles, by piso. empty for a role that may not read them, or a corte
+// without them
+export interface DetalleFicha extends Ficha {
+  niveles: Nivel[]
 }
 
 export interface Pagina<T> {

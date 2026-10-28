@@ -1,7 +1,20 @@
 import { ApiError, api, type ApiClient } from '@wasichai/core'
 import { useMutation, useQuery, useQueryClient, type Query } from '@tanstack/react-query'
 import { minimoValido } from './colores'
-import type { CapaGis, Corte, Decision, Ficha, Filtros, LotesCollection, Orden, Pagina, Panel, ResultadoDecision, ServiciosGeoServer } from './tipos'
+import type {
+  CapaGis,
+  Corte,
+  Decision,
+  DetalleFicha,
+  Ficha,
+  Filtros,
+  LotesCollection,
+  Orden,
+  Pagina,
+  Panel,
+  ResultadoDecision,
+  ServiciosGeoServer
+} from './tipos'
 
 const BASE = '/catastro/brechas'
 
@@ -50,6 +63,17 @@ export function useFichas(corte: string | undefined, filtros: Filtros, orden: Or
     queryFn: () => api<Pagina<Ficha>>(`${BASE}/fichas?${qs}`),
     enabled: !!corte,
     placeholderData: delMismoCorte<Pagina<Ficha>>(corte),
+    retry: false
+  })
+}
+
+// one ficha of the corte with its niveles, when the detail is open. a decision invalidates it with the fichas
+export function useFicha(corte: string | undefined, id: string | null) {
+  const qs = parametros(corte, FILTROS_VACIOS).toString()
+  return useQuery({
+    queryKey: ['brechas', 'fichas', corte, 'detalle', id],
+    queryFn: () => api<DetalleFicha>(`${BASE}/fichas/${encodeURIComponent(id!)}?${qs}`),
+    enabled: !!corte && !!id,
     retry: false
   })
 }

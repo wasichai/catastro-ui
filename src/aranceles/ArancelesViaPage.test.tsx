@@ -53,6 +53,17 @@ describe('ArancelesViaPage', () => {
     expect(aniosDisponibles(2026)).toEqual([2023, 2024, 2025, 2026, 2027])
   })
 
+  it('puts everything under the header in a body with the p-8 of the pages of @wasichai/core', async () => {
+    fetch = mockFetch([{ path: '/catastro/vias/aranceles', body: coleccion([100, 200]) }])
+    renderWithProviders(<ArancelesViaPage />)
+    // the shell's <main> has no padding: without this the content touches the sidebar and the right edge
+    const cuerpo = screen.getByTestId('cuerpo-aranceles')
+    expect(cuerpo).toHaveClass('p-8', 'flex-1')
+    expect(cuerpo).not.toContainElement(screen.getByRole('heading', { level: 1, name: 'Aranceles por vía' }))
+    expect(cuerpo).toContainElement(screen.getByLabelText('Año'))
+    expect(cuerpo).toContainElement(await screen.findByTestId('mapa'))
+  })
+
   it('draws the legend from the quantiles of the values, plus the grey entries', async () => {
     fetch = mockFetch([{ path: '/catastro/vias/aranceles', body: coleccion(Array.from({ length: 50 }, (_, i) => 100 + i)) }])
     renderWithProviders(<ArancelesViaPage />)

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.1](https://github.com/wasichai/catastro-ui/compare/v1.2.0...v1.2.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **aranceles:** el contenido de la página toma el margen lateral del encabezado ([#31](https://github.com/wasichai/catastro-ui/issues/31)) ([ff82bf8](https://github.com/wasichai/catastro-ui/commit/ff82bf8ffa031f8bad6f588ac3f1eed067bcc432)), closes [#30](https://github.com/wasichai/catastro-ui/issues/30)
+* **brechas:** el contenido de la página toma el margen lateral del encabezado ([#29](https://github.com/wasichai/catastro-ui/issues/29)) ([5422942](https://github.com/wasichai/catastro-ui/commit/54229429546bcbadcbb793feb3c11874d25d28e2))
+* el nombre de la app sigue a la institución de la organización ([#34](https://github.com/wasichai/catastro-ui/issues/34)) ([3a67189](https://github.com/wasichai/catastro-ui/commit/3a67189d8d9796684398e567605bc9505f8026d5)), closes [#33](https://github.com/wasichai/catastro-ui/issues/33)
+
 ## [1.2.0](https://github.com/wasichai/catastro-ui/compare/v1.1.0...v1.2.0) (2026-10-28)
 
 

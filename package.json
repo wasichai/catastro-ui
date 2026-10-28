@@ -1,6 +1,6 @@
 {
     "name": "catastro-ui",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "private": true,
     "description": "Catastro (Perené): admin de catastro-backend sobre @wasichai/*",
     "type": "module",
